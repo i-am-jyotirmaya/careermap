@@ -4,9 +4,10 @@
 
 ## Key Capabilities
 
-1. **Persuasive First-Run Onboarding Gate & Direct-to-Dashboard Routing**
-   - New users are greeted with a persuasive, local-first onboarding showcase (`OnboardingFlowView.tsx`) featuring value pillars, AI provider tips, identity customization, and a **mandatory AI Engine setup gate** before entering the application.
-   - Once onboarded (`isOnboarded: true`), CareerForge routes directly to **Career Streams** (`StreamsHubView.tsx`) as the primary dashboard, complete with KPI cards and 1-click Quick-Start stream templates.
+1. **Short Onboarding & Learning-First Dashboard**
+   - First-time users connect one AI provider, optionally enter their name, then open the dashboard. Advanced routing and profile customization are available later in Settings and Profile.
+   - Start a roadmap from your resume, a target role or skill, or a quick-start template. Returning users see their selected roadmap and the next unfinished topic, with phases that expand on demand.
+   - If the last AI provider is disabled, returning users can still open saved roadmaps and reconnect AI from Settings. New users must connect a provider before completing onboarding.
 
 2. **Top-Right User Avatar Menu, User Profile & Detailed Settings (`Danger Zone`)**
    - Top-right **User Avatar Menu** (`UserAvatarMenu.tsx`) houses **User Profile** (`UserProfileView.tsx`), **Vault & Achievements** (`GamificationVaultView.tsx`), **Settings** (`SettingsView.tsx`), and the **Secret Oracle Console (`Ctrl+K`)**.

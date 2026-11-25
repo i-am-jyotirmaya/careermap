@@ -310,15 +310,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   return (
     <PageTransition className="space-y-6">
       {/* Settings Header & Brutalist Sub-Navigation Bar */}
-      <div className="rounded-base border-2 border-border bg-secondary-background p-6 shadow-shadow">
+      <div className="space-y-4">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
           <div className="max-w-2xl">
             <h1 className="font-heading text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
-              Platform Settings &amp; Control Center
+              Settings
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Manage your multi-provider AI inference fleet, TypeSafe Jev routing, workspace UI
-              preferences, transient memory caches, and SQLite data lifecycle.
+              Manage AI connections, preferences and local data.
             </p>
           </div>
 
@@ -327,6 +326,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <button
               type="button"
               onClick={() => setActiveSection('ai_engine')}
+              aria-pressed={activeSection === 'ai_engine'}
               className={`neo-press inline-flex cursor-pointer items-center gap-2 rounded-base border-2 border-border px-4 py-2.5 font-heading text-xs font-bold ${
                 activeSection === 'ai_engine'
                   ? 'translate-x-[2px] translate-y-[2px] bg-[#88AAEE] text-black shadow-[2px_2px_0px_0px_var(--border)]'
@@ -334,7 +334,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               }`}
             >
               <Cpu className="h-4 w-4 stroke-[2.25]" />
-              <span>AI Engine &amp; Jev Router</span>
+              <span>AI connections</span>
               <Badge variant="mint" className="px-2 py-0 font-mono text-[10px]">
                 {status.connectedProviderCount} Connected
               </Badge>
@@ -343,6 +343,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <button
               type="button"
               onClick={() => setActiveSection('preferences')}
+              aria-pressed={activeSection === 'preferences'}
               className={`neo-press inline-flex cursor-pointer items-center gap-2 rounded-base border-2 border-border px-4 py-2.5 font-heading text-xs font-bold ${
                 activeSection === 'preferences'
                   ? 'translate-x-[2px] translate-y-[2px] bg-[#FFDC58] text-black shadow-[2px_2px_0px_0px_var(--border)]'
@@ -350,15 +351,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               }`}
             >
               <SlidersHorizontal className="h-4 w-4 stroke-[2.25]" />
-              <span>Workspace, UI &amp; Memory Cache</span>
-              <Badge variant="cyan" className="px-2 py-0 font-mono text-[10px]">
-                {totalCachedItems} Cached
-              </Badge>
+              <span>Preferences</span>
             </button>
 
             <button
               type="button"
               onClick={() => setActiveSection('danger_zone')}
+              aria-pressed={activeSection === 'danger_zone'}
               className={`neo-press inline-flex cursor-pointer items-center gap-2 rounded-base border-2 border-border px-4 py-2.5 font-heading text-xs font-bold ${
                 activeSection === 'danger_zone'
                   ? 'translate-x-[2px] translate-y-[2px] bg-[#FF6B6B] text-black shadow-[2px_2px_0px_0px_var(--border)]'
@@ -366,7 +365,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               }`}
             >
               <AlertTriangle className="h-4 w-4 stroke-[2.25]" />
-              <span>Danger Zone</span>
+              <span>Data &amp; reset</span>
             </button>
           </div>
         </div>

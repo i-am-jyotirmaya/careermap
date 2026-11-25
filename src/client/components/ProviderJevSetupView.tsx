@@ -57,6 +57,8 @@ interface Props {
   onGamificationDelta: (delta: GamificationDelta | null) => void;
   onGoToResume: () => void;
   hideContinueButton?: boolean;
+  simpleSetup?: boolean;
+  onProviderVerified?: () => void;
 }
 
 const PROVIDER_CARDS: Array<{
@@ -113,9 +115,13 @@ export const ProviderJevSetupView: React.FC<Props> = ({
   onGamificationDelta,
   onGoToResume,
   hideContinueButton = false,
+  simpleSetup = false,
+  onProviderVerified,
 }) => {
   const defaultType: ProviderType = 'codex_subscription';
   const [editingId, setEditingId] = useState<string | undefined>(undefined);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showConnectionDetails, setShowConnectionDetails] = useState(false);
   const [selectedType, setSelectedType] = useState<ProviderType>(defaultType);
   const [name, setName] = useState(presets[defaultType]?.defaultName ?? 'ChatGPT Codex Subscription');
   const [baseUrl, setBaseUrl] = useState(
@@ -197,6 +203,7 @@ export const ProviderJevSetupView: React.FC<Props> = ({
         });
       }
       await onRefreshAll();
+      if (res.verificationResult?.ok) onProviderVerified?.();
     } catch (err) {
       setProviderBanner({
         kind: 'err',
@@ -243,11 +250,17 @@ export const ProviderJevSetupView: React.FC<Props> = ({
   };
 
   const handleDeleteProvider = async (id: string) => {
-    await api.deleteProvider(id);
-    if (editingId === id) {
-      setEditingId(undefined);
+    const provider = providers.find((p) => p.id === id);
+    if (!window.confirm(`Delete ${provider?.name ?? 'this provider'}? You can reconnect it later.`)) return;
+    try {
+      await api.deleteProvider(id);
+      if (editingId === id) {
+        selectPresetType(selectedType);
+      }
+      await onRefreshAll();
+    } catch (err) {
+      setProviderBanner({ kind: 'err', text: err instanceof Error ? err.message : 'Could not delete provider.' });
     }
-    await onRefreshAll();
   };
 
   const handleChannelChange = (ch: JevChannel) => {
@@ -398,13 +411,12 @@ export const ProviderJevSetupView: React.FC<Props> = ({
   return (
     <div className="space-y-8">
       {/* Step 1 Hero Banner */}
-      <Card className="overflow-hidden border-2 border-border bg-secondary-background py-0 gap-0 shadow-brutal-lg">
+      {!simpleSetup && <Card className="overflow-hidden border-2 border-border bg-secondary-background py-0 gap-0 shadow-brutal-lg">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b-2 border-border bg-[#88AAEE] px-6 py-3">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="dark">STEP 1</Badge>
             <span className="inline-flex items-center gap-1.5 font-heading text-xs font-bold uppercase tracking-wider text-foreground">
               <Cpu className="h-3.5 w-3.5 stroke-[2.5]" />
-              Multi-Provider AI Engine &amp; TypeSafe Jev Router
+              AI providers
             </span>
           </div>
           <NeoStarBurst size={24} fill="#FFDC58" />
@@ -414,17 +426,14 @@ export const ProviderJevSetupView: React.FC<Props> = ({
           <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <h1 className="font-heading text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
-                Configure Your Inference Fleet
+                AI connections
               </h1>
               <p className="mt-1.5 max-w-3xl text-sm leading-relaxed text-muted-foreground">
-                Connect your AI providers once — you never have to assign models to individual tasks.
-                CareerForge automatically discovers models and uses TypeSafe&apos;s Jev (or its
-                built-in Autonomous Router when Jev is not configured) to choose the right model per
-                task.
+                Connect one or more providers. CareerForge chooses models automatically.
               </p>
 
               <div className="mt-4 flex flex-wrap items-center gap-2.5 text-xs">
-                <span className="inline-flex items-center gap-1.5 rounded-base border-2 border-border bg-background px-3 py-1 font-heading font-bold text-foreground shadow-[2px_2px_0px_0px_var(--border)]">
+                <span className="hidden">
                   <Database className="h-3.5 w-3.5" />
                   Local SQLite:{' '}
                   <code className="rounded-[4px] border border-border bg-secondary-background px-1.5 py-0.5 font-mono text-[11px] text-foreground">
@@ -472,12 +481,12 @@ export const ProviderJevSetupView: React.FC<Props> = ({
             )}
           </div>
         </div>
-      </Card>
+      </Card>}
 
       {/* Main Two-Column Grid */}
-      <div className="grid gap-8 xl:grid-cols-12">
+      <div className="space-y-6">
         {/* LEFT 7 COLS: Provider Builder & Configured Fleet */}
-        <div className="space-y-6 xl:col-span-7">
+        <div className="space-y-6">
           <Card className="overflow-hidden py-0 gap-0">
             <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 border-b-2 border-border bg-background py-4">
               <div className="flex items-center gap-2.5">
@@ -500,15 +509,17 @@ export const ProviderJevSetupView: React.FC<Props> = ({
               )}
             </CardHeader>
 
-            <CardContent className="p-6">
+            <CardContent className="p-4 sm:p-6">
               {/* Provider Type Picker */}
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="sm:hidden"><label htmlFor="provider-type" className="mb-2 block text-sm font-heading font-bold">Provider</label><NeoSelect id="provider-type" value={selectedType} onChange={(e) => selectPresetType(e.target.value as ProviderType)} className="w-full">{PROVIDER_CARDS.map((card) => <option key={card.type} value={card.type}>{card.label}</option>)}</NeoSelect><p className="mt-2 text-xs text-muted-foreground">{PROVIDER_CARDS.find((card) => card.type === selectedType)?.subtitle}</p></div>
+              <div className="hidden gap-2 sm:grid sm:grid-cols-2">
                 {PROVIDER_CARDS.map((card) => {
                   const active = selectedType === card.type;
                   return (
                     <motion.button
                       key={card.type}
                       type="button"
+                      aria-pressed={active}
                       whileHover={{ x: -2, y: -2 }}
                       whileTap={{ x: 2, y: 2 }}
                       transition={NEO_SPRING}
@@ -559,12 +570,14 @@ export const ProviderJevSetupView: React.FC<Props> = ({
 
               {/* Provider Configuration Form */}
               <form onSubmit={handleSaveProvider} className="mt-6 space-y-4">
-                <div className="grid gap-4 sm:grid-cols-2">
+                {simpleSetup && selectedType !== 'ollama' && selectedType !== 'openai_compatible' && <button type="button" className="text-sm font-heading font-bold underline underline-offset-4" aria-expanded={showConnectionDetails} onClick={() => setShowConnectionDetails((v) => !v)}>{showConnectionDetails ? 'Hide' : 'Edit'} connection details</button>}
+                <div className={cn('grid gap-4 sm:grid-cols-2', simpleSetup && !showConnectionDetails && selectedType !== 'ollama' && selectedType !== 'openai_compatible' && 'hidden')}>
                   <div>
-                    <label className="mb-1.5 block font-heading text-xs font-bold uppercase tracking-wider text-foreground">
+                    <label htmlFor="provider-name" className="mb-1.5 block font-heading text-xs font-bold uppercase tracking-wider text-foreground">
                       Display Name
                     </label>
                     <Input
+                      id="provider-name"
                       type="text"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
@@ -573,10 +586,11 @@ export const ProviderJevSetupView: React.FC<Props> = ({
                   </div>
                   {selectedType !== 'codex_subscription' && (
                     <div>
-                      <label className="mb-1.5 block font-heading text-xs font-bold uppercase tracking-wider text-foreground">
+                      <label htmlFor="provider-url" className="mb-1.5 block font-heading text-xs font-bold uppercase tracking-wider text-foreground">
                         Base API URL
                       </label>
                       <Input
+                        id="provider-url"
                         type="text"
                         value={baseUrl}
                         onChange={(e) => setBaseUrl(e.target.value)}
@@ -619,12 +633,14 @@ export const ProviderJevSetupView: React.FC<Props> = ({
                       exit={{ opacity: 0, y: -6 }}
                       transition={NEO_GENTLE_SPRING}
                     >
-                      <label className="mb-1.5 block font-heading text-xs font-bold uppercase tracking-wider text-foreground">
+                      <label htmlFor="provider-key" className="mb-1.5 block font-heading text-xs font-bold uppercase tracking-wider text-foreground">
                         {selectedType === 'ollama'
                           ? 'API Key (Optional for Local Ollama)'
                           : 'API Key / Secret Token'}
                       </label>
                       <Input
+                        id="provider-key"
+                        autoComplete="off"
                         type="password"
                         value={secretInput}
                         onChange={(e) => setSecretInput(e.target.value)}
@@ -644,7 +660,7 @@ export const ProviderJevSetupView: React.FC<Props> = ({
                 </AnimatePresence>
 
                 {/* Automatic Model Selection Notice */}
-                <div className="rounded-base border-2 border-border bg-[#A985FF]/25 p-4 shadow-[2px_2px_0px_0px_var(--border)]">
+                {!simpleSetup && <div className="rounded-base border-2 border-border bg-[#A985FF]/25 p-4 shadow-[2px_2px_0px_0px_var(--border)]">
                   <div className="flex items-center gap-2 font-heading text-xs font-bold text-foreground">
                     <span className="inline-flex h-6 w-6 items-center justify-center rounded-base border-2 border-border bg-[#A985FF] text-foreground">
                       <Sparkles className="h-3.5 w-3.5" />
@@ -656,7 +672,7 @@ export const ProviderJevSetupView: React.FC<Props> = ({
                     catalogs this provider&apos;s models and dynamically selects the right model &amp;
                     reasoning effort for resume analysis, roadmaps, learning guides, and evaluations.
                   </p>
-                </div>
+                </div>}
 
                 <AnimatePresence>
                   {providerBanner && (
@@ -676,7 +692,7 @@ export const ProviderJevSetupView: React.FC<Props> = ({
                       ) : (
                         <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 stroke-[2.5] text-foreground" />
                       )}
-                      <span className="leading-relaxed">{providerBanner.text}</span>
+                      <span role={providerBanner.kind === 'err' ? 'alert' : 'status'} className="leading-relaxed">{providerBanner.text}</span>
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -693,14 +709,14 @@ export const ProviderJevSetupView: React.FC<Props> = ({
                   ) : (
                     <Server className="h-4 w-4" />
                   )}
-                  {editingId ? 'Save & Verify Connection' : 'Connect & Verify AI Provider'}
+                  {savingProvider ? 'Connecting…' : editingId ? 'Save & verify' : 'Connect & verify'}
                 </Button>
               </form>
             </CardContent>
           </Card>
 
           {/* Configured Providers List */}
-          <Card className="overflow-hidden py-0 gap-0">
+          {(!simpleSetup || providers.length > 0) && <Card className="overflow-hidden py-0 gap-0">
             <CardHeader className="flex flex-row items-center justify-between border-b-2 border-border bg-background py-4">
               <CardTitle className="text-base">
                 AI Providers ({providers.length})
@@ -821,11 +837,13 @@ export const ProviderJevSetupView: React.FC<Props> = ({
                 </div>
               )}
             </CardContent>
-          </Card>
+          </Card>}
         </div>
 
         {/* RIGHT 5 COLS: TypeSafe Jev Configuration Status & Automatic Routing Telemetry */}
-        <div className="space-y-6 xl:col-span-5">
+        {!simpleSetup && <>
+          <Button type="button" variant="neutral" aria-expanded={showAdvanced} onClick={() => setShowAdvanced((v) => !v)}>{showAdvanced ? 'Hide' : 'Show'} advanced routing & diagnostics</Button>
+          <div className="space-y-6" hidden={!showAdvanced}>
           <Card className="overflow-hidden py-0 gap-0">
             <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 border-b-2 border-border bg-[#FFDC58] py-4">
               <div className="flex items-center gap-2.5">
@@ -1093,7 +1111,8 @@ export const ProviderJevSetupView: React.FC<Props> = ({
               </div>
             </CardContent>
           </Card>
-        </div>
+          </div>
+        </>}
       </div>
     </div>
   );

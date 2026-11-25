@@ -57,7 +57,7 @@ export function createApp(db: CareerForgeDB) {
   const buildSystemStatus = (): SystemStatusResponse => {
     const providers = db.listProviders();
     const activeProviders = providers.filter((p) => p.enabled);
-    const connectedProviders = providers.filter((p) => p.connectionStatus === 'connected');
+    const connectedProviders = activeProviders.filter((p) => p.connectionStatus === 'connected');
     const jev = db.getJevConfig();
     const latestResume = db.getLatestResume();
     const activeStreams = db.listStreams().filter((s) => s.status === 'active');
@@ -67,7 +67,7 @@ export function createApp(db: CareerForgeDB) {
     return {
       dbPath: db.dbPath,
       dbFileSizeBytes: db.getDbFileSizeBytes(),
-      isOnboarded: player.hasCompletedOnboarding && activeProviders.length > 0,
+      isOnboarded: player.hasCompletedOnboarding,
       hasActiveProvider: activeProviders.length > 0,
       activeProviderCount: activeProviders.length,
       connectedProviderCount: connectedProviders.length,
