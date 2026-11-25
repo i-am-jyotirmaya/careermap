@@ -51,6 +51,8 @@ import type {
 
 interface Props {
   topicId: string;
+  hasActiveProvider?: boolean;
+  onGoToSetup?: () => void;
   onBackToStream: (streamId: string) => void;
   onSelectTopic?: (topicId: string) => void;
   onRefreshAll: () => Promise<void>;
@@ -62,6 +64,8 @@ interface Props {
 
 export const TopicWorkbenchView: React.FC<Props> = ({
   topicId,
+  hasActiveProvider = true,
+  onGoToSetup,
   onBackToStream,
   onSelectTopic,
   onRefreshAll,
@@ -73,7 +77,7 @@ export const TopicWorkbenchView: React.FC<Props> = ({
   const [loading, setLoading] = useState(true);
   const [fallbackTopicId, setFallbackTopicId] = useState<string | null>(null);
   const [showRoadmapGraph, setShowRoadmapGraph] = useState<boolean>(
-    defaultShowRoadmapGraph ?? true
+    defaultShowRoadmapGraph ?? false
   );
   const loadSeqRef = useRef(0);
   const shouldAnimate = animationsEnabled !== false;
@@ -129,10 +133,10 @@ export const TopicWorkbenchView: React.FC<Props> = ({
       setFocusNote(ws.lastResourceFocusNote ?? '');
       setDifficulty(ws.topic.isBossTopic ? 'boss' : 'standard');
 
-      const firstRes = ws.resources[0];
+      const firstRes = ws.resources.find((resource) => !resource.isCompleted) ?? ws.resources[0];
       setSelectedResourceId(firstRes ? firstRes.id : null);
 
-      const firstProb = ws.problems[0];
+      const firstProb = ws.problems.find((problem) => problem.draftSolution && problem.bestScore === null) ?? ws.problems[0];
       setSelectedProblemId(firstProb ? firstProb.id : null);
       setSolutionText(
         firstProb ? firstProb.draftSolution || firstProb.starterTemplate : ''
@@ -349,7 +353,7 @@ export const TopicWorkbenchView: React.FC<Props> = ({
   if (!topic || !stream) {
     return (
       <Card className="p-8 text-center">
-        <p className="font-heading text-base font-bold text-foreground">Topic not found.</p>
+        <p role="alert" className="font-heading text-base font-bold text-foreground">{errorMsg || 'Topic not found.'}</p><Button onClick={() => void loadWorkspace(effectiveTopicId)}>Try again</Button>
       </Card>
     );
   }
@@ -358,12 +362,16 @@ export const TopicWorkbenchView: React.FC<Props> = ({
     (sum, phase) => sum + phase.topics.length,
     0
   );
+  const allTopics = stream.phases.flatMap((phase) => phase.topics);
+  const topicIndex = allTopics.findIndex((candidate) => candidate.id === topic.id);
+  const nextTopic = allTopics[topicIndex + 1];
 
   const editorLanguage = activeProblem?.languageHint || defaultLanguageHint || 'markdown';
   const solutionLineCount = solutionText ? solutionText.split('\n').length : 1;
 
   return (
     <div className="space-y-6">
+      {!hasActiveProvider && <div className="flex flex-wrap items-center justify-between gap-3 rounded-base border-2 border-border bg-[#FFDC58]/40 p-4"><p className="text-sm">Your saved learning materials are available. Connect AI to generate new content or evaluate solutions.</p>{onGoToSetup && <Button variant="neutral" size="sm" onClick={onGoToSetup}>Connect AI</Button>}</div>}
       {/* Top Stream & Topic Context Header */}
       <Card className="overflow-hidden py-0">
         <div
@@ -385,7 +393,7 @@ export const TopicWorkbenchView: React.FC<Props> = ({
               onClick={() => onBackToStream(stream.id)}
             >
               <ArrowLeft className="h-3.5 w-3.5" />
-              Back to {stream.title} (Stream Lvl {stream.level} · {stream.masteryPercent}% Mastery)
+              Back to roadmap
             </Button>
 
             <div className="flex flex-wrap items-center gap-2">
@@ -409,7 +417,7 @@ export const TopicWorkbenchView: React.FC<Props> = ({
                       : 'neutral'
                 }
               >
-                Topic Mastery: {topic.masteryScore}% ({topic.status.replace('_', ' ')})
+                {topic.status.replace('_', ' ')} · {topic.masteryScore}%
               </Badge>
               <Button
                 type="button"
@@ -419,7 +427,7 @@ export const TopicWorkbenchView: React.FC<Props> = ({
                 aria-expanded={showRoadmapGraph}
               >
                 <Workflow className="h-3.5 w-3.5" />
-                <span>Roadmap Flow Graph</span>
+                <span>Roadmap map</span>
                 <span className="rounded-[4px] border border-black bg-white px-1.5 py-0 font-mono text-[10px] font-extrabold text-black">
                   {totalRoadmapNodes}
                 </span>
@@ -431,6 +439,8 @@ export const TopicWorkbenchView: React.FC<Props> = ({
               </Button>
             </div>
           </div>
+
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground"><span className="min-w-0 break-words">{stream.title} · Topic {topicIndex + 1} of {totalRoadmapNodes}</span>{nextTopic && <Button variant="neutral" size="xs" onClick={() => onSelectTopic ? onSelectTopic(nextTopic.id) : setFallbackTopicId(nextTopic.id)}>Next topic <ChevronDown className="size-4 -rotate-90" /></Button>}</div>
 
           <h1 className="mt-3.5 font-heading text-2xl font-extrabold tracking-tight text-foreground sm:text-3xl">
             {topic.title}
@@ -462,30 +472,32 @@ export const TopicWorkbenchView: React.FC<Props> = ({
                 type="button"
                 size="sm"
                 variant={subTab === 'learn' ? 'default' : 'neutral'}
+                aria-pressed={subTab === 'learn'}
                 onClick={() => setSubTab('learn')}
                 className={cn(
                   subTab !== 'learn' && 'border-transparent bg-transparent shadow-none hover:border-border'
                 )}
               >
                 <BookOpen className="h-4 w-4" />
-                Learning Resources ({topic.completedResourceCount}/{resources.length})
+                Learn ({topic.completedResourceCount}/{resources.length})
               </Button>
               <Button
                 type="button"
                 size="sm"
                 variant={subTab === 'practice' ? 'yellow' : 'neutral'}
+                aria-pressed={subTab === 'practice'}
                 onClick={() => setSubTab('practice')}
                 className={cn(
                   subTab !== 'practice' && 'border-transparent bg-transparent shadow-none hover:border-border'
                 )}
               >
                 <Swords className="h-4 w-4" />
-                Practice Arena &amp; Evaluator ({topic.solvedProblemCount}/{problems.length})
+                Practice ({topic.solvedProblemCount}/{problems.length})
               </Button>
             </div>
 
             {latestDecisionBanner && (
-              <div className="inline-flex items-center gap-1.5 rounded-base border-2 border-border bg-[#A985FF]/35 px-3 py-1.5 text-xs font-heading font-bold text-foreground shadow-[2px_2px_0px_0px_var(--border)]">
+              <details className="max-w-full text-xs"><summary className="cursor-pointer font-heading font-bold text-muted-foreground">AI generation details</summary><div className="mt-2 flex flex-wrap items-center gap-1.5 break-all rounded-base border-2 border-border bg-[#A985FF]/35 px-3 py-1.5 text-xs font-heading font-bold text-foreground">
                 <GitBranch className="h-3.5 w-3.5 text-black" />
                 <span>
                   {latestDecisionBanner.decidedBy === 'typesafe_jev'
@@ -496,7 +508,7 @@ export const TopicWorkbenchView: React.FC<Props> = ({
                   </strong>{' '}
                   ({latestDecisionBanner.reasoningEffort})
                 </span>
-              </div>
+              </div></details>
             )}
           </div>
 
@@ -561,47 +573,35 @@ export const TopicWorkbenchView: React.FC<Props> = ({
             <Card size="sm">
               <CardContent className="space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                  <Badge variant="mint">
-                    <Database className="h-3 w-3" />
-                    {resources.length > 0 && servedFromMemory
-                      ? 'Loaded Instantly from Memory Cache (Zero AI Calls)'
-                      : 'Resources will be cached in memory once prepared'}
-                  </Badge>
+                  <h2 className="font-heading text-base font-bold">Learning resources</h2>
                   {resourceConsistencyNote && (
-                    <Badge variant="default">✓ {resourceConsistencyNote}</Badge>
+                    <p role="status" className="break-words text-xs text-muted-foreground">{resourceConsistencyNote}</p>
                   )}
                 </div>
 
                 <div className="flex flex-wrap items-center gap-3">
-                  <Input
-                    type="text"
-                    value={focusNote}
-                    onChange={(e) => setFocusNote(e.target.value)}
-                    placeholder="Optional focus update (if unchanged, Refresh keeps consistent resources from memory)..."
-                    className="min-w-[240px] flex-1"
-                  />
                   <Button
                     type="button"
                     variant="default"
                     onClick={() => handleGenerateResources(resources.length > 0)}
-                    disabled={generatingRes}
+                    disabled={generatingRes || !hasActiveProvider}
                   >
                     {generatingRes ? (
                       <>
                         <Loader2 className="h-4 w-4 animate-spin" />
                         {resources.length > 0
-                          ? 'Checking Updates & Refreshing...'
-                          : 'Preparing Resources...'}
+                          ? 'Checking for updates…'
+                          : 'Preparing resources…'}
                       </>
                     ) : resources.length > 0 ? (
                       <>
                         <RefreshCw className="h-4 w-4" />
-                        Refresh Resources (On Demand)
+                        Refresh resources
                       </>
                     ) : (
                       <>
                         <Sparkles className="h-4 w-4" />
-                        Prepare AI Guide &amp; External Resources
+                        Generate study guide
                       </>
                     )}
                   </Button>
@@ -611,9 +611,10 @@ export const TopicWorkbenchView: React.FC<Props> = ({
                     onClick={() => setShowCustomResForm((v) => !v)}
                   >
                     <Plus className="h-4 w-4" />
-                    Add External Link
+                    Add a link
                   </Button>
                 </div>
+                <details className="text-sm"><summary className="cursor-pointer font-heading font-bold">Customize generation</summary><label htmlFor="topic-focus" className="mt-2 block text-xs text-muted-foreground">Optional focus area</label><Input id="topic-focus" value={focusNote} onChange={(e) => setFocusNote(e.target.value)} placeholder="What should the guide focus on?" className="mt-2" />{servedFromMemory && <p className="mt-2 text-xs text-muted-foreground">Saved resources are reused unless the focus changes.</p>}</details>
               </CardContent>
             </Card>
 
@@ -665,31 +666,31 @@ export const TopicWorkbenchView: React.FC<Props> = ({
             </AnimatePresence>
 
             {resources.length === 0 ? (
-              <Card className="border-dashed bg-[#FFFDF7] p-12 text-center">
+              <Card className="border-dashed bg-secondary-background p-6 text-center sm:p-10">
                 <CardContent className="flex flex-col items-center">
                   <div className="flex h-14 w-14 items-center justify-center rounded-base border-2 border-black bg-[#88AAEE] shadow-[3px_3px_0px_0px_#000]">
                     <BookOpen className="h-7 w-7 text-black" />
                   </div>
                   <h3 className="mt-4 font-heading text-lg font-extrabold text-foreground">
-                    Ready to Synthesize Learning Resources
+                    Start learning this topic
                   </h3>
                   <p className="mx-auto mt-1.5 max-w-md text-xs leading-relaxed text-muted-foreground">
-                    Click <strong className="text-foreground">Prepare AI Guide &amp; External Resources</strong>{' '}
-                    above to create an interactive Markdown study module, active-recall flashcards,
-                    and curated external references!
+                    Generate a study guide to get explanations, flashcards, and recommended reading.
                   </p>
                 </CardContent>
               </Card>
             ) : (
               <div className="grid gap-6 lg:grid-cols-12">
                 {/* Resource Sidebar List */}
-                <div className="space-y-3 lg:col-span-4">
+                <div className="lg:hidden"><label htmlFor="mobile-resource" className="block font-heading text-sm font-bold">Choose a resource</label><NeoSelect id="mobile-resource" value={activeResource?.id ?? ''} onChange={(e) => setSelectedResourceId(e.target.value)} className="mt-2 w-full">{resources.map((resource) => <option key={resource.id} value={resource.id}>{resource.isCompleted ? '✓ ' : ''}{resource.title}</option>)}</NeoSelect></div>
+                <div className="hidden space-y-3 lg:col-span-4 lg:block">
                   {resources.map((r) => {
                     const selected = activeResource?.id === r.id;
                     return (
                       <div
                         key={r.id}
                         role="button"
+                        aria-pressed={selected}
                         tabIndex={0}
                         onClick={() => setSelectedResourceId(r.id)}
                         onKeyDown={(e) => {
@@ -763,7 +764,7 @@ export const TopicWorkbenchView: React.FC<Props> = ({
                               rel="noreferrer"
                               className={cn(buttonVariants({ variant: 'neutral', size: 'sm' }))}
                             >
-                              Open External Resource
+                              Open link
                               <ExternalLink className="h-3.5 w-3.5" />
                             </a>
                           )}
@@ -773,6 +774,8 @@ export const TopicWorkbenchView: React.FC<Props> = ({
                             size="icon-sm"
                             onClick={() => handleToggleBookmark(activeResource)}
                             title="Bookmark"
+                            aria-label="Bookmark resource"
+                            aria-pressed={activeResource.isBookmarked}
                           >
                             <Bookmark className="h-4 w-4" />
                           </Button>
@@ -812,6 +815,7 @@ export const TopicWorkbenchView: React.FC<Props> = ({
             <Card size="sm">
               <CardContent className="flex flex-wrap items-center gap-3">
                 <NeoSelect
+                  aria-label="Challenge type"
                   value={archetype}
                   onChange={(e) => setArchetype(e.target.value as ProblemArchetype)}
                 >
@@ -823,6 +827,7 @@ export const TopicWorkbenchView: React.FC<Props> = ({
                 </NeoSelect>
 
                 <NeoSelect
+                  aria-label="Challenge difficulty"
                   value={difficulty}
                   onChange={(e) => setDifficulty(e.target.value as ProblemDifficulty)}
                 >
@@ -836,17 +841,17 @@ export const TopicWorkbenchView: React.FC<Props> = ({
                   type="button"
                   variant="yellow"
                   onClick={handleGenerateProblem}
-                  disabled={generatingProb}
+                  disabled={generatingProb || !hasActiveProvider}
                 >
                   {generatingProb ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin" />
-                      Forging Challenge...
+                      Creating challenge…
                     </>
                   ) : (
                     <>
                       <Swords className="h-4 w-4" />
-                      Generate Practice Challenge
+                      Create challenge
                     </>
                   )}
                 </Button>
@@ -864,6 +869,8 @@ export const TopicWorkbenchView: React.FC<Props> = ({
                       type="button"
                       size="sm"
                       variant={isCurrent ? 'yellow' : 'neutral'}
+                      aria-pressed={isCurrent}
+                      className="h-auto min-h-9 max-w-full whitespace-normal py-2 text-left"
                       onClick={() => handleSelectProblem(p)}
                     >
                       <span>
@@ -984,7 +991,7 @@ export const TopicWorkbenchView: React.FC<Props> = ({
                           variant="violet"
                           size="sm"
                           onClick={handleAskCoach}
-                          disabled={askingCoach}
+                          disabled={askingCoach || !hasActiveProvider}
                         >
                           {askingCoach ? (
                             <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -1089,7 +1096,7 @@ export const TopicWorkbenchView: React.FC<Props> = ({
                         size="lg"
                         className="w-full"
                         onClick={handleSubmitSolution}
-                        disabled={submittingEval || solutionText.trim().length < 10}
+                        disabled={submittingEval || !hasActiveProvider || solutionText.trim().length < 10}
                       >
                         {submittingEval ? (
                           <>

@@ -1,44 +1,26 @@
 import React, { useRef, useState } from 'react';
-import { AnimatePresence, motion } from 'motion/react';
 import {
   ArrowRight,
-  Award,
   BookOpen,
   CheckCircle2,
-  Compass,
-  Crown,
-  Database,
+  ChevronDown,
   FileText,
-  Flame,
-  Layers,
   Loader2,
-  Pause,
-  Play,
   Plus,
   RefreshCw,
-  Rocket,
-  Sparkles,
   Swords,
-  Target,
   Trash2,
-  X,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import {
-  NEO_SPRING,
-  NeoSelect,
-  NeoStarBurst,
-  PageTransition,
-  StaggerContainer,
-  StaggerItem,
-} from '@/components/ui/motion-primitives';
 import { Progress } from '@/components/ui/progress';
 import { Textarea } from '@/components/ui/textarea';
+import { NeoSelect } from '@/components/ui/motion-primitives';
 import { cn } from '@/lib/utils';
 import { api } from '../lib/api.ts';
+import { getNextTopic } from '../../shared/learningFlow.ts';
 import type { CareerStream, GamificationDelta, StreamTopic } from '../../shared/types.ts';
 
 interface Props {
@@ -50,78 +32,38 @@ interface Props {
   onRefreshAll: () => Promise<void>;
   onGamificationDelta: (delta: GamificationDelta | null) => void;
   onGoToResume: () => void;
+  onGoToSetup: () => void;
   compactCards?: boolean;
 }
 
-interface QuickStartTemplate {
-  title: string;
-  targetRole: string;
-  colorTheme: CareerStream['colorTheme'];
-  badge: string;
-  focusDescription: string;
-}
-
-const QUICK_START_TEMPLATES: QuickStartTemplate[] = [
+const TEMPLATES = [
   {
-    title: 'Staff Distributed Systems Architect',
-    targetRole: 'Staff Distributed Systems Architect',
-    colorTheme: 'indigo',
-    badge: 'Systems & Scale',
-    focusDescription:
-      'Consensus protocols, multi-region replication, high-throughput event streaming, backpressure and tail-latency resilience, capacity modeling, and staff-level architecture RFCs.',
+    title: 'Distributed systems',
+    role: 'Staff Distributed Systems Architect',
+    focus:
+      'Consensus protocols, replication, event streaming, backpressure, capacity modeling and architecture RFCs.',
   },
   {
-    title: 'Production Agentic AI Engineer',
-    targetRole: 'Staff AI Systems & Agent Engineer',
-    colorTheme: 'emerald',
-    badge: 'AI Engineering',
-    focusDescription:
-      'Tool-using LLM orchestration, deterministic evaluation harnesses, memory and retrieval architectures, cost/latency routing guardrails, structured outputs, and production reliability.',
+    title: 'AI engineering',
+    role: 'Staff AI Systems & Agent Engineer',
+    focus:
+      'Tool-using LLMs, evaluation, memory, retrieval, cost and latency, structured outputs and production reliability.',
   },
   {
-    title: 'Engineering Leadership & Tech Lead',
-    targetRole: 'Engineering Manager / Principal Tech Lead',
-    colorTheme: 'amber',
-    badge: 'Leadership Track',
-    focusDescription:
-      'Technical strategy and multi-quarter roadmapping, cross-team execution, architecture review governance, incident command, mentoring senior engineers, and stakeholder alignment.',
+    title: 'Engineering leadership',
+    role: 'Engineering Manager / Principal Tech Lead',
+    focus:
+      'Technical strategy, cross-team execution, architecture reviews, incident command, mentoring and stakeholder alignment.',
   },
 ];
 
-const STREAM_ACCENT: Record<
-  CareerStream['colorTheme'],
-  { banner: string; tint: string; pill: string }
-> = {
-  indigo: {
-    banner: 'bg-[#88AAEE]',
-    tint: 'bg-[#88AAEE]/18',
-    pill: 'bg-[#88AAEE] text-black',
-  },
-  emerald: {
-    banner: 'bg-[#05E17A]',
-    tint: 'bg-[#05E17A]/18',
-    pill: 'bg-[#05E17A] text-black',
-  },
-  amber: {
-    banner: 'bg-[#FFDC58]',
-    tint: 'bg-[#FFDC58]/24',
-    pill: 'bg-[#FFDC58] text-black',
-  },
-  rose: {
-    banner: 'bg-[#FF6B6B]',
-    tint: 'bg-[#FF6B6B]/18',
-    pill: 'bg-[#FF6B6B] text-black',
-  },
-  cyan: {
-    banner: 'bg-[#22D3EE]',
-    tint: 'bg-[#22D3EE]/18',
-    pill: 'bg-[#22D3EE] text-black',
-  },
-  violet: {
-    banner: 'bg-[#A985FF]',
-    tint: 'bg-[#A985FF]/18',
-    pill: 'bg-[#A985FF] text-black',
-  },
+const STREAM_COLORS: Record<CareerStream['colorTheme'], string> = {
+  indigo: 'bg-[#88AAEE]',
+  emerald: 'bg-[#05E17A]',
+  amber: 'bg-[#FFDC58]',
+  rose: 'bg-[#FF6B6B]',
+  cyan: 'bg-[#22D3EE]',
+  violet: 'bg-[#A985FF]',
 };
 
 export const StreamsHubView: React.FC<Props> = ({
@@ -133,866 +75,492 @@ export const StreamsHubView: React.FC<Props> = ({
   onRefreshAll,
   onGamificationDelta,
   onGoToResume,
+  onGoToSetup,
   compactCards = false,
 }) => {
-  const [showCustomModal, setShowCustomModal] = useState(false);
-  const [customTitle, setCustomTitle] = useState('');
-  const [customRole, setCustomRole] = useState('');
-  const [customDesc, setCustomDesc] = useState('');
-  const [customTheme, setCustomTheme] = useState<CareerStream['colorTheme']>('cyan');
-  const [creatingCustom, setCreatingCustom] = useState(false);
-  const [refreshingNodes, setRefreshingNodes] = useState(false);
-  const [streamConsistencyNote, setStreamConsistencyNote] = useState<string | null>(null);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const customFormRef = useRef<HTMLFormElement | null>(null);
-
   const activeStream =
-    streams.find((s) => s.id === selectedStreamId) ?? streams[0] ?? null;
+    streams.find((s) => s.id === selectedStreamId) ??
+    streams.find((s) => s.status === 'active') ??
+    streams[0];
+  const nextTopic = activeStream ? getNextTopic(activeStream) : undefined;
+  const [creating, setCreating] = useState(false);
+  const [showAddOptions, setShowAddOptions] = useState(false);
+  const [showCreate, setShowCreate] = useState(false);
+  const [role, setRole] = useState('');
+  const [title, setTitle] = useState('');
+  const [focus, setFocus] = useState('');
+  const [theme, setTheme] = useState<CareerStream['colorTheme']>('cyan');
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const formRef = useRef<HTMLElement | null>(null);
 
-  const activeStreamsCount = streams.filter((s) => s.status === 'active').length;
-  const averageMasteryPercent =
-    streams.length > 0
-      ? Math.round(streams.reduce((sum, s) => sum + s.masteryPercent, 0) / streams.length)
-      : 0;
-  const totalChallengesSolved = streams.reduce((sum, s) => sum + s.problemsSolved, 0);
-  const totalResourcesCompleted = streams.reduce((sum, s) => sum + s.resourcesCompleted, 0);
+  function openCreator(template?: (typeof TEMPLATES)[number]) {
+    setRole(template?.role ?? '');
+    setTitle(template?.title ?? '');
+    setFocus(template?.focus ?? '');
+    setShowCreate(true);
+    setError(null);
+    requestAnimationFrame(() => formRef.current?.scrollIntoView({ block: 'nearest' }));
+  }
 
-  const handleApplyTemplate = (tpl: QuickStartTemplate) => {
-    setCustomTitle(tpl.title);
-    setCustomRole(tpl.targetRole);
-    setCustomDesc(tpl.focusDescription);
-    setCustomTheme(tpl.colorTheme);
-    setErrorMsg(null);
-    setShowCustomModal(true);
-    setTimeout(() => {
-      customFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }, 50);
-  };
-
-  const handleCreateCustom = async (e: React.FormEvent) => {
+  async function create(e: React.FormEvent) {
     e.preventDefault();
-    if (!hasActiveProvider) {
-      setErrorMsg('Configure at least one AI provider first.');
-      return;
-    }
-    setCreatingCustom(true);
-    setErrorMsg(null);
+    if (!role.trim() || !hasActiveProvider) return;
+    setCreating(true);
+    setError(null);
     try {
-      const res = await api.launchStream({
+      const result = await api.launchStream({
         customStreamInput: {
-          title: customTitle,
-          targetRole: customRole,
-          focusDescription: customDesc,
-          colorTheme: customTheme,
+          title: title.trim() || role.trim(),
+          targetRole: role.trim(),
+          focusDescription:
+            focus.trim() ||
+            `Develop the knowledge and practical skills required for ${role.trim()}.`,
+          colorTheme: theme,
         },
       });
-      onGamificationDelta(res.gamificationDelta);
-      setCustomTitle('');
-      setCustomRole('');
-      setCustomDesc('');
-      setShowCustomModal(false);
+      onGamificationDelta(result.gamificationDelta);
       await onRefreshAll();
-      onSelectStream(res.stream.id);
+      onSelectStream(result.stream.id);
+      setShowCreate(false);
+      setShowAddOptions(false);
+      setRole('');
+      setTitle('');
+      setFocus('');
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : 'Failed to create stream');
+      setError(
+        err instanceof Error ? err.message : 'Could not create this roadmap. Please try again.',
+      );
     } finally {
-      setCreatingCustom(false);
+      setCreating(false);
     }
-  };
+  }
 
-  const handleTogglePause = async (stream: CareerStream) => {
-    const next = stream.status === 'active' ? 'paused' : 'active';
-    await api.updateStreamStatus(stream.id, next);
-    await onRefreshAll();
-  };
-
-  const handleDelete = async (stream: CareerStream) => {
-    await api.deleteStream(stream.id);
-    await onRefreshAll();
-  };
-
-  const handleRefreshStreamNodes = async (stream: CareerStream) => {
-    setRefreshingNodes(true);
-    setStreamConsistencyNote(null);
-    setErrorMsg(null);
+  async function manage(action: 'pause' | 'refresh' | 'delete', stream: CareerStream) {
+    if (
+      action === 'delete' &&
+      !window.confirm(`Delete “${stream.title}” and its learning progress? This cannot be undone.`)
+    )
+      return;
+    setBusy(true);
+    setError(null);
+    setMessage(null);
     try {
-      const res = await api.refreshStreamNodes(stream.id);
-      setStreamConsistencyNote(res.consistencyNote);
+      if (action === 'delete') await api.deleteStream(stream.id);
+      else if (action === 'pause')
+        await api.updateStreamStatus(stream.id, stream.status === 'active' ? 'paused' : 'active');
+      else {
+        const res = await api.refreshStreamNodes(stream.id);
+        setMessage(res.consistencyNote);
+      }
       await onRefreshAll();
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : 'Failed to refresh roadmap nodes');
+      setError(
+        err instanceof Error ? err.message : 'Could not update this roadmap. Please try again.',
+      );
     } finally {
-      setRefreshingNodes(false);
+      setBusy(false);
     }
-  };
+  }
 
   return (
-    <PageTransition className="space-y-8 text-foreground">
-      {/* Command Center Hero Header */}
-      <Card className="overflow-hidden border-2 border-border bg-secondary-background p-0 shadow-brutal-lg">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b-2 border-border bg-[#FFDC58] px-6 py-3">
-          <div className="inline-flex items-center gap-2 font-heading text-xs font-black uppercase tracking-wider text-black">
-            <Layers className="h-4 w-4" />
-            Independent Multi-Stream Command Center
-          </div>
-          <Badge variant="neutral" className="text-[11px]">
-            1.25x Polymath Combo Ready
-          </Badge>
+    <div className="space-y-6">
+      <header className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="font-heading text-3xl font-bold">My career roadmaps</h1>
+          <p className="mt-1 max-w-xl text-sm text-muted-foreground">
+            {streams.length
+              ? 'Pick a roadmap and keep building your skills, one topic at a time.'
+              : 'Choose where you want to go. We’ll help you turn that goal into a learning plan.'}
+          </p>
         </div>
-
-        <div className="flex flex-wrap items-center justify-between gap-5 p-6">
-          <div className="max-w-3xl">
-            <div className="flex items-center gap-2.5">
-              <h1 className="font-heading text-2xl font-black tracking-tight text-foreground sm:text-3xl">
-                Your Parallel Career Growth Streams ({streams.length})
-              </h1>
-              <NeoStarBurst size={26} fill="#FFDC58" className="hidden sm:block" />
-            </div>
-            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-              Each stream tracks its own Level, XP, Mastery %, learning library, and practice
-              evaluations independently. Earn XP in 2+ streams on the same day for a{' '}
-              <span className="inline-block rounded-base border-2 border-border bg-[#FFDC58] px-1.5 py-0.5 font-heading text-xs font-bold text-black shadow-[2px_2px_0px_0px_var(--border)]">
-                1.25x Polymath Combo Bonus
-              </span>
-              !
-            </p>
-          </div>
-
-          <div className="flex flex-wrap gap-3">
-            <Button type="button" variant="neutral" onClick={onGoToResume}>
-              <FileText className="h-4 w-4" />
-              + Launch from Resume Roadmaps
-            </Button>
-            <Button
-              type="button"
-              variant="default"
-              onClick={() => setShowCustomModal((v) => !v)}
-            >
-              <Plus className="h-4 w-4" />
-              New Custom Stream
-            </Button>
-          </div>
-        </div>
-      </Card>
-
-      {/* Dashboard KPI Summary Row */}
-      <StaggerContainer className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StaggerItem>
-          <div className="neo-card-lift rounded-base border-2 border-border bg-secondary-background p-4 shadow-shadow">
-            <div className="flex items-center justify-between gap-2">
-              <span className="font-heading text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                Active Streams
-              </span>
-              <div className="flex h-10 w-10 items-center justify-center rounded-base border-2 border-border bg-[#88AAEE] text-black shadow-[2px_2px_0px_0px_var(--border)]">
-                <Layers className="h-5 w-5" />
-              </div>
-            </div>
-            <div className="mt-3 flex items-baseline gap-2">
-              <span className="font-heading text-3xl font-black text-foreground">
-                {activeStreamsCount}
-              </span>
-              <span className="text-xs font-medium text-muted-foreground">
-                {streams.length > 0 ? `of ${streams.length} total` : 'ready to launch'}
-              </span>
-            </div>
-          </div>
-        </StaggerItem>
-
-        <StaggerItem>
-          <div className="neo-card-lift rounded-base border-2 border-border bg-secondary-background p-4 shadow-shadow">
-            <div className="flex items-center justify-between gap-2">
-              <span className="font-heading text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                Average Mastery %
-              </span>
-              <div className="flex h-10 w-10 items-center justify-center rounded-base border-2 border-border bg-[#05E17A] text-black shadow-[2px_2px_0px_0px_var(--border)]">
-                <Target className="h-5 w-5" />
-              </div>
-            </div>
-            <div className="mt-3 flex items-baseline gap-2">
-              <span className="font-heading text-3xl font-black text-foreground">
-                {averageMasteryPercent}%
-              </span>
-              <span className="text-xs font-medium text-muted-foreground">across streams</span>
-            </div>
-          </div>
-        </StaggerItem>
-
-        <StaggerItem>
-          <div className="neo-card-lift rounded-base border-2 border-border bg-secondary-background p-4 shadow-shadow">
-            <div className="flex items-center justify-between gap-2">
-              <span className="font-heading text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                Total Challenges Solved
-              </span>
-              <div className="flex h-10 w-10 items-center justify-center rounded-base border-2 border-border bg-[#FFDC58] text-black shadow-[2px_2px_0px_0px_var(--border)]">
-                <Swords className="h-5 w-5" />
-              </div>
-            </div>
-            <div className="mt-3 flex items-baseline gap-2">
-              <span className="font-heading text-3xl font-black text-foreground">
-                {totalChallengesSolved}
-              </span>
-              <span className="text-xs font-medium text-muted-foreground">rubric-verified</span>
-            </div>
-          </div>
-        </StaggerItem>
-
-        <StaggerItem>
-          <div className="neo-card-lift rounded-base border-2 border-border bg-secondary-background p-4 shadow-shadow">
-            <div className="flex items-center justify-between gap-2">
-              <span className="font-heading text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                Total Resources Completed
-              </span>
-              <div className="flex h-10 w-10 items-center justify-center rounded-base border-2 border-border bg-[#A985FF] text-black shadow-[2px_2px_0px_0px_var(--border)]">
-                <BookOpen className="h-5 w-5" />
-              </div>
-            </div>
-            <div className="mt-3 flex items-baseline gap-2">
-              <span className="font-heading text-3xl font-black text-foreground">
-                {totalResourcesCompleted}
-              </span>
-              <span className="text-xs font-medium text-muted-foreground">guides &amp; packs</span>
-            </div>
-          </div>
-        </StaggerItem>
-      </StaggerContainer>
-
-      {/* Custom Stream Creator Drawer */}
-      <AnimatePresence initial={false}>
-        {showCustomModal && (
-          <motion.form
-            key="custom-stream-drawer"
-            ref={customFormRef}
-            onSubmit={handleCreateCustom}
-            initial={{ opacity: 0, y: -14, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -10, scale: 0.98 }}
-            transition={NEO_SPRING}
-            className="overflow-hidden rounded-base border-2 border-border bg-secondary-background shadow-brutal-lg"
+        {streams.length > 0 && (
+          <Button
+            onClick={() => { setShowAddOptions((v) => !v); setShowCreate(false); }}
+            aria-expanded={showAddOptions}
+            disabled={creating}
           >
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b-2 border-border bg-[#A985FF] px-6 py-4 text-black">
-              <div>
-                <h3 className="font-heading text-base font-black text-black">
-                  Architect a Custom Independent Career Stream
-                </h3>
-                <p className="text-xs font-medium text-black/80">
-                  Review or customize the details below, then click Generate Stream Curriculum.
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <Badge variant="yellow" className="uppercase tracking-wider">
-                  3-Phase Curriculum + Boss Capstone
-                </Badge>
-                <Button
-                  type="button"
-                  variant="neutral"
-                  size="icon-sm"
-                  onClick={() => setShowCustomModal(false)}
-                  aria-label="Close custom stream drawer"
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
+            <Plus className="size-4" /> New roadmap
+          </Button>
+        )}
+      </header>
+      {!hasActiveProvider && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-base border-2 border-border bg-[#FFDC58]/40 p-4">
+          <p className="text-sm">
+            Connect an AI provider to create or refresh learning content. Your saved roadmaps are
+            still available.
+          </p>
+          <Button variant="neutral" size="sm" onClick={onGoToSetup}>
+            Connect AI
+          </Button>
+        </div>
+      )}
 
-            <div className="space-y-4 p-6">
-              <div className="grid gap-4 sm:grid-cols-3">
+      {(streams.length === 0 || showAddOptions) && (
+        <Card className="p-5 sm:p-6">
+          <h2 className="font-heading text-xl font-bold">
+            {streams.length ? 'Add another roadmap' : 'Create your first roadmap'}
+          </h2>
+          <div className="mt-1 grid gap-4 sm:grid-cols-2">
+            <div className="rounded-base border-2 border-border bg-main/20 p-4">
+              <div className="flex items-center gap-2 font-heading font-bold">
+                <FileText className="size-5" /> Start with your resume
+              </div>
+              <p className="my-3 text-sm text-muted-foreground">
+                Get suggested career paths based on your experience and goals.
+              </p>
+              <Button onClick={onGoToResume} disabled={creating} className="w-full">
+                Upload resume <ArrowRight className="size-4" />
+              </Button>
+            </div>
+            <div className="rounded-base border-2 border-border bg-secondary-background p-4">
+              <div className="flex items-center gap-2 font-heading font-bold">
+                <Plus className="size-5" /> I know my goal
+              </div>
+              <p className="my-3 text-sm text-muted-foreground">
+                Create a roadmap for a role or skill you already want to pursue.
+              </p>
+              <Button variant="neutral" onClick={() => openCreator()} disabled={creating} className="w-full">
+                Enter a goal
+              </Button>
+            </div>
+          </div>
+          <div className="border-t-2 border-border pt-4">
+            <p className="mb-2 text-sm font-heading font-bold">Or try a starting point</p>
+            <div className="flex flex-wrap gap-2">
+              {TEMPLATES.map((template) => (
+                <Button
+                  key={template.title}
+                  size="sm"
+                  variant="neutral"
+                  onClick={() => openCreator(template)}
+                  disabled={creating}
+                >
+                  {template.title}
+                </Button>
+              ))}
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {showCreate && (
+        <section
+          ref={formRef}
+          className="rounded-base border-2 border-border bg-secondary-background p-5 shadow-shadow sm:p-6"
+          aria-label="Create a roadmap"
+        >
+          <h2 className="text-xl font-heading font-bold">What do you want to learn?</h2>
+          <form onSubmit={create} className="mt-4 space-y-4">
+            <div>
+              <label htmlFor="roadmap-role" className="block font-heading text-sm font-bold">
+                Target role or skill
+              </label>
+              <Input
+                id="roadmap-role"
+                value={role}
+                onChange={(e) => setRole(e.target.value)}
+                required
+                placeholder="e.g. Staff .NET engineer"
+                className="mt-2"
+              />
+            </div>
+            <div>
+              <label htmlFor="roadmap-focus" className="block font-heading text-sm font-bold">
+                Focus areas (optional)
+              </label>
+              <Textarea
+                id="roadmap-focus"
+                value={focus}
+                onChange={(e) => setFocus(e.target.value)}
+                rows={3}
+                placeholder="What would you like to get better at?"
+                className="mt-2"
+              />
+            </div>
+            <details className="rounded-base border border-border p-3">
+              <summary className="cursor-pointer font-heading text-sm font-bold">
+                Customize title and color
+              </summary>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <div>
-                  <label className="block font-heading text-xs font-bold uppercase tracking-wider text-foreground">
-                    Stream Title
+                  <label htmlFor="roadmap-title" className="block text-sm font-bold">
+                    Title
                   </label>
                   <Input
-                    type="text"
-                    required
-                    value={customTitle}
-                    onChange={(e) => setCustomTitle(e.target.value)}
-                    placeholder="e.g. Production Agentic AI Engineering"
-                    className="mt-1.5"
+                    id="roadmap-title"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder="Uses your goal by default"
                   />
                 </div>
                 <div>
-                  <label className="block font-heading text-xs font-bold uppercase tracking-wider text-foreground">
-                    Target Role
-                  </label>
-                  <Input
-                    type="text"
-                    required
-                    value={customRole}
-                    onChange={(e) => setCustomRole(e.target.value)}
-                    placeholder="e.g. Staff AI Systems Engineer"
-                    className="mt-1.5"
-                  />
-                </div>
-                <div>
-                  <label className="block font-heading text-xs font-bold uppercase tracking-wider text-foreground">
-                    Accent Theme
+                  <label htmlFor="roadmap-color" className="block text-sm font-bold">
+                    Color
                   </label>
                   <NeoSelect
-                    value={customTheme}
-                    onChange={(e) =>
-                      setCustomTheme(e.target.value as CareerStream['colorTheme'])
-                    }
-                    className="mt-1.5 w-full"
+                    id="roadmap-color"
+                    value={theme}
+                    onChange={(e) => setTheme(e.target.value as CareerStream['colorTheme'])}
+                    className="w-full"
                   >
-                    <option value="cyan">Cyan</option>
-                    <option value="indigo">Indigo</option>
-                    <option value="emerald">Emerald</option>
-                    <option value="amber">Amber</option>
-                    <option value="rose">Rose</option>
-                    <option value="violet">Violet</option>
+                    {['cyan', 'indigo', 'emerald', 'amber', 'rose', 'violet'].map((color) => (
+                      <option key={color} value={color}>
+                        {color}
+                      </option>
+                    ))}
                   </NeoSelect>
                 </div>
               </div>
-
-              <div>
-                <label className="block font-heading text-xs font-bold uppercase tracking-wider text-foreground">
-                  Skills, Goals &amp; Focus Areas
-                </label>
-                <Textarea
-                  rows={3}
-                  required
-                  value={customDesc}
-                  onChange={(e) => setCustomDesc(e.target.value)}
-                  placeholder="Describe what you want to master in this independent stream..."
-                  className="mt-1.5"
-                />
-              </div>
-
-              {errorMsg && (
-                <div className="rounded-base border-2 border-border bg-[#FF6B6B] px-3.5 py-2.5 font-heading text-xs font-bold text-black shadow-[2px_2px_0px_0px_var(--border)]">
-                  {errorMsg}
-                </div>
-              )}
-
-              <div className="flex flex-wrap justify-end gap-2.5 pt-2">
-                <Button
-                  type="button"
-                  variant="neutral"
-                  onClick={() => setShowCustomModal(false)}
-                >
-                  Cancel
-                </Button>
-                <Button type="submit" variant="mint" disabled={creatingCustom}>
-                  {creatingCustom ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Rocket className="h-4 w-4" />
-                  )}
-                  Generate Stream Curriculum
-                </Button>
-              </div>
+            </details>
+            <div className="flex flex-wrap justify-end gap-3">
+              <Button
+                type="button"
+                variant="neutral"
+                onClick={() => setShowCreate(false)}
+                disabled={creating}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={creating || !role.trim() || !hasActiveProvider}>
+                {creating ? <Loader2 className="size-4 animate-spin" /> : null}
+                {creating ? 'Creating roadmap…' : 'Create roadmap'}
+              </Button>
             </div>
-          </motion.form>
-        )}
-      </AnimatePresence>
+          </form>
+        </section>
+      )}
+      {error && (
+        <p role="alert" className="rounded-base border-2 border-border bg-[#FF6B6B]/30 p-4 text-sm">
+          {error}
+        </p>
+      )}
+      {message && (
+        <p
+          role="status"
+          className="rounded-base border-2 border-border bg-[#05E17A]/20 p-4 text-sm"
+        >
+          {message}
+        </p>
+      )}
 
-      {streams.length === 0 ? (
-        <Card className="overflow-hidden border-2 border-border bg-secondary-background p-0 shadow-brutal-lg">
-          <div className="border-b-2 border-border bg-background px-6 py-6 sm:px-8">
-            <div className="max-w-2xl">
-              <Badge variant="yellow" className="uppercase tracking-wider">
-                <Compass className="h-3.5 w-3.5" />
-                Welcome Dashboard Launchpad
-              </Badge>
-              <h2 className="mt-3 font-heading text-xl font-black text-foreground sm:text-2xl">
-                Ignite Your First Career Growth Stream
-              </h2>
-              <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-                Choose how you want to start: analyze your existing resume for personalized career
-                tracks, or pick a curated Quick-Start blueprint below to launch a stream right away.
-              </p>
-            </div>
-          </div>
-
-          <StaggerContainer className="grid gap-6 p-6 sm:p-8 lg:grid-cols-2">
-            {/* Card A: Upload Resume & Generate Personalized Roadmaps */}
-            <StaggerItem className="h-full">
-              <Card className="neo-card-lift flex h-full flex-col justify-between overflow-hidden border-2 border-border bg-secondary-background p-0 shadow-shadow">
-                <div>
-                  <div className="flex items-center justify-between gap-3 border-b-2 border-border bg-[#88AAEE] px-6 py-4">
-                    <div className="flex h-11 w-11 items-center justify-center rounded-base border-2 border-border bg-secondary-background text-foreground shadow-[2px_2px_0px_0px_var(--border)]">
-                      <FileText className="h-5 w-5" />
-                    </div>
-                    <Badge variant="yellow" className="uppercase tracking-wider">
-                      Recommended Path
-                    </Badge>
-                  </div>
-
-                  <div className="p-6">
-                    <h3 className="font-heading text-lg font-black text-foreground">
-                      Tailored From Your Existing Resume
-                    </h3>
-                    <p className="mt-2 text-xs leading-relaxed text-muted-foreground sm:text-sm">
-                      Upload a PDF, DOCX, Markdown, or plain-text resume. CareerForge extracts your
-                      skill superpowers and growth gaps, then precomputes multi-phase roadmaps
-                      cached in local memory for instant stream activation.
-                    </p>
-
-                    <ul className="mt-5 space-y-2.5 text-xs font-medium text-foreground">
-                      <li className="flex items-center gap-2.5">
-                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-base border-2 border-border bg-[#05E17A] text-black">
-                          <CheckCircle2 className="h-3.5 w-3.5" />
-                        </span>
-                        Skill gap diagnosis &amp; role-fit scoring
-                      </li>
-                      <li className="flex items-center gap-2.5">
-                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-base border-2 border-border bg-[#05E17A] text-black">
-                          <CheckCircle2 className="h-3.5 w-3.5" />
-                        </span>
-                        Vertical, leadership, and specialist frontier tracks
-                      </li>
-                      <li className="flex items-center gap-2.5">
-                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-base border-2 border-border bg-[#05E17A] text-black">
-                          <CheckCircle2 className="h-3.5 w-3.5" />
-                        </span>
-                        Precomputed topic nodes cached locally in SQLite
-                      </li>
-                    </ul>
-                  </div>
-                </div>
-
-                <div className="border-t-2 border-border bg-background p-6">
-                  <Button
-                    type="button"
-                    variant="default"
-                    size="lg"
-                    onClick={onGoToResume}
-                    className="w-full text-xs sm:text-sm"
-                  >
-                    <FileText className="h-4 w-4" />
-                    Upload Resume &amp; Generate Personalized Roadmaps
-                    <ArrowRight className="h-4 w-4" />
-                  </Button>
-                </div>
-              </Card>
-            </StaggerItem>
-
-            {/* Card B: Launch a Quick-Start Stream Template */}
-            <StaggerItem className="h-full">
-              <Card className="neo-card-lift flex h-full flex-col justify-between overflow-hidden border-2 border-border bg-secondary-background p-0 shadow-shadow">
-                <div>
-                  <div className="flex items-center justify-between gap-3 border-b-2 border-border bg-[#05E17A] px-6 py-4">
-                    <div className="flex h-11 w-11 items-center justify-center rounded-base border-2 border-border bg-secondary-background text-foreground shadow-[2px_2px_0px_0px_var(--border)]">
-                      <Sparkles className="h-5 w-5" />
-                    </div>
-                    <Badge variant="neutral" className="uppercase tracking-wider">
-                      Instant Blueprints
-                    </Badge>
-                  </div>
-
-                  <div className="p-6">
-                    <h3 className="font-heading text-lg font-black text-foreground">
-                      Launch a Quick-Start Stream Template
-                    </h3>
-                    <p className="mt-2 text-xs leading-relaxed text-muted-foreground sm:text-sm">
-                      No resume handy? Select a battle-tested starter blueprint below to
-                      pre-populate the Custom Stream architect and generate your 3-phase curriculum
-                      in one click.
-                    </p>
-
-                    <div className="mt-5 space-y-3">
-                      {QUICK_START_TEMPLATES.map((tpl) => {
-                        const accent = STREAM_ACCENT[tpl.colorTheme];
-                        return (
-                          <motion.button
-                            key={tpl.title}
-                            type="button"
-                            whileTap={{ scale: 0.99 }}
-                            onClick={() => handleApplyTemplate(tpl)}
-                            className="neo-press group flex w-full cursor-pointer items-start justify-between gap-3 rounded-base border-2 border-border bg-background p-3.5 text-left shadow-shadow hover:bg-secondary-background"
-                          >
-                            <div className="min-w-0">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <span className="font-heading text-xs font-black text-foreground">
-                                  {tpl.title}
-                                </span>
-                                <span
-                                  className={cn(
-                                    'rounded-base border-2 border-border px-2 py-0.5 font-heading text-[10px] font-bold uppercase shadow-[1px_1px_0px_0px_var(--border)]',
-                                    accent.pill
-                                  )}
-                                >
-                                  {tpl.badge}
-                                </span>
-                              </div>
-                              <p className="mt-1.5 line-clamp-2 text-[11px] leading-relaxed text-muted-foreground">
-                                {tpl.focusDescription}
-                              </p>
-                            </div>
-                            <span className="mt-0.5 inline-flex shrink-0 items-center gap-1 rounded-base border-2 border-border bg-[#FFDC58] px-2.5 py-1 font-heading text-[10px] font-bold uppercase text-black shadow-[2px_2px_0px_0px_var(--border)]">
-                              Use
-                              <ArrowRight className="h-3 w-3" />
-                            </span>
-                          </motion.button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-              </Card>
-            </StaggerItem>
-          </StaggerContainer>
-        </Card>
-      ) : (
-        <>
-          {/* Multi-Stream Comparison Cards */}
-          <StaggerContainer
-            className={
-              compactCards
-                ? 'grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
-                : 'grid gap-5 md:grid-cols-2 xl:grid-cols-3'
-            }
-          >
-            {streams.map((s) => {
-              const selected = activeStream?.id === s.id;
-              const style = STREAM_ACCENT[s.colorTheme];
-              const xpPct = Math.min(
-                100,
-                Math.round((s.xp / Math.max(1, s.xpToNextLevel)) * 100)
-              );
-
-              return (
-                <StaggerItem key={s.id} className="h-full">
-                  <div
-                    onClick={() => onSelectStream(s.id)}
-                    className={cn(
-                      'neo-card-lift flex h-full cursor-pointer flex-col justify-between overflow-hidden rounded-base border-2 border-border bg-secondary-background',
-                      selected
-                        ? 'shadow-brutal-lg ring-2 ring-black -translate-x-[2px] -translate-y-[2px]'
-                        : 'shadow-shadow'
-                    )}
-                  >
-                    {/* Top Neo-Pop Stream Accent Header */}
-                    <div
-                      className={cn(
-                        'flex items-center justify-between gap-2 border-b-2 border-border text-black',
-                        style.banner,
-                        compactCards ? 'px-3.5 py-2' : 'px-5 py-3'
-                      )}
-                    >
-                      <div className="flex items-center gap-1.5">
-                        <span className="inline-block rounded-base border-2 border-border bg-secondary-background px-2 py-0.5 font-heading text-[10px] font-bold uppercase tracking-wider text-foreground shadow-[2px_2px_0px_0px_var(--border)]">
-                          Lvl {s.level} · {s.status}
-                        </span>
-                        {selected && (
-                          <Badge
-                            variant="dark"
-                            className="px-1.5 py-0 text-[9px] uppercase tracking-wider"
-                          >
-                            Active
-                          </Badge>
-                        )}
-                      </div>
-
-                      <div className="rounded-base border-2 border-border bg-secondary-background px-2 py-0.5 text-right shadow-[2px_2px_0px_0px_var(--border)]">
-                        <span
-                          className={cn(
-                            'font-heading font-black text-foreground',
-                            compactCards ? 'text-xs' : 'text-sm'
-                          )}
-                        >
-                          {s.masteryPercent}%
-                        </span>
-                        <span className="ml-1 font-heading text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
-                          Mastery
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className={cn('flex-1', compactCards ? 'p-3.5' : 'p-5')}>
-                      <h3
-                        className={cn(
-                          'font-heading font-black text-foreground',
-                          compactCards ? 'truncate text-sm' : 'text-base'
-                        )}
-                      >
-                        {s.title}
-                      </h3>
-                      <p className="mt-0.5 truncate text-xs font-medium text-muted-foreground">
-                        Target: {s.targetRole}
-                      </p>
-
-                      {/* Independent Stream XP Bar */}
-                      <div className={compactCards ? 'mt-3' : 'mt-4'}>
-                        <div className="mb-1.5 flex justify-between font-mono text-[11px] font-bold text-foreground">
-                          <span>
-                            Stream XP: {s.xp} / {s.xpToNextLevel}
-                          </span>
-                          <span>{xpPct}%</span>
-                        </div>
-                        <Progress
-                          value={xpPct}
-                          className={compactCards ? 'h-3' : 'h-4'}
-                          indicatorClassName={style.banner}
-                        />
-                      </div>
-
-                      <div
-                        className={cn(
-                          'grid grid-cols-4 gap-1.5 border-t-2 border-border text-center',
-                          compactCards ? 'mt-3 pt-2.5 text-[10px]' : 'mt-4 pt-3.5 text-[11px]'
-                        )}
-                      >
-                        <div className="rounded-base border border-border/30 bg-background py-1">
-                          <div className="font-heading font-black text-foreground">
-                            {s.resourcesCompleted}
-                          </div>
-                          <div className="text-[10px] font-medium text-muted-foreground">
-                            Study
-                          </div>
-                        </div>
-                        <div className="rounded-base border border-border/30 bg-background py-1">
-                          <div className="font-heading font-black text-foreground">
-                            {s.problemsSolved}
-                          </div>
-                          <div className="text-[10px] font-medium text-muted-foreground">
-                            Solved
-                          </div>
-                        </div>
-                        <div className="rounded-base border border-border/30 bg-[#05E17A]/20 py-1">
-                          <div className="font-heading font-black text-foreground">
-                            {s.totalEvaluations > 0 ? `${s.avgScore}%` : '—'}
-                          </div>
-                          <div className="text-[10px] font-medium text-muted-foreground">
-                            Avg Eval
-                          </div>
-                        </div>
-                        <div className="rounded-base border border-border/30 bg-[#FFDC58]/35 py-1">
-                          <div className="inline-flex items-center justify-center gap-0.5 font-heading font-black text-foreground">
-                            <Flame className="h-3 w-3 fill-[#FFDC58] text-black" />
-                            {s.streakDays}d
-                          </div>
-                          <div className="text-[10px] font-medium text-muted-foreground">
-                            Streak
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </StaggerItem>
-              );
-            })}
-          </StaggerContainer>
-
-          {/* Selected Stream Detailed 3-Phase Roadmap */}
-          {activeStream && (
-            <motion.div
-              key={activeStream.id}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={NEO_SPRING}
-              className="overflow-hidden rounded-base border-2 border-border bg-secondary-background shadow-brutal-lg"
+      {activeStream && (
+        <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,260px)_minmax(0,1fr)]">
+          <aside className="space-y-3" aria-label="Your roadmaps">
+            <h2 className="font-heading text-sm font-bold">Your roadmaps ({streams.length})</h2>
+            <NeoSelect
+              aria-label="Select roadmap"
+              value={activeStream.id}
+              onChange={(e) => {
+                onSelectStream(e.target.value);
+                setError(null);
+                setMessage(null);
+              }}
+              className="w-full lg:hidden"
             >
+              {streams.map((stream) => (
+                <option key={stream.id} value={stream.id}>
+                  {stream.title}
+                </option>
+              ))}
+            </NeoSelect>
+            <div className="hidden gap-2 lg:grid lg:grid-cols-1">
+              {streams.map((stream) => (
+                <button
+                  key={stream.id}
+                  type="button"
+                  aria-pressed={activeStream.id === stream.id}
+                  onClick={() => {
+                    onSelectStream(stream.id);
+                    setMessage(null);
+                    setError(null);
+                  }}
+                  className={cn(
+                    'min-w-0 rounded-base border-2 border-border p-3 text-left focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+                    activeStream.id === stream.id
+                      ? 'bg-main shadow-brutal-sm'
+                      : 'bg-secondary-background hover:bg-background',
+                  )}
+                >
+                  <span className="flex items-start gap-2 break-words font-heading font-bold">
+                    <span
+                      aria-hidden="true"
+                      className={cn(
+                        'mt-1 size-3 shrink-0 rounded-base border border-border',
+                        STREAM_COLORS[stream.colorTheme],
+                      )}
+                    />
+                    {stream.title}
+                  </span>
+                  <div className="mt-2 flex justify-between gap-2 text-xs">
+                    <span>{stream.status === 'paused' ? 'Paused' : `Level ${stream.level}`}</span>
+                    <span>{stream.masteryPercent}% mastery</span>
+                  </div>
+                  {!compactCards && <Progress value={stream.masteryPercent} className="mt-2 h-2" />}
+                </button>
+              ))}
+            </div>
+            <Button variant="neutral" size="sm" className="w-full" onClick={onGoToResume}>
+              <FileText className="size-4" /> Resume &amp; suggestions
+            </Button>
+          </aside>
+          <section className="min-w-0 space-y-4" aria-label="Selected roadmap">
+            <Card className="gap-0 overflow-hidden p-0">
               <div
                 className={cn(
-                  'flex flex-wrap items-start justify-between gap-4 border-b-2 border-border p-6',
-                  STREAM_ACCENT[activeStream.colorTheme].tint
+                  'border-b-2 border-border p-5',
+                  STREAM_COLORS[activeStream.colorTheme],
                 )}
               >
-                <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant="mint">
-                      <Database className="h-3 w-3" />
-                      Roadmap Nodes Cached in Memory (AI-Free Navigation)
-                    </Badge>
-                    <Badge
+                <p className="text-xs font-heading font-bold uppercase tracking-wide">
+                  {activeStream.status === 'paused' ? 'Paused roadmap' : 'Current roadmap'}
+                </p>
+                <h2 className="mt-1 break-words text-2xl font-heading font-bold">
+                  {activeStream.title}
+                </h2>
+                <p className="mt-1 text-sm">{activeStream.targetRole}</p>
+              </div>
+              <div className="space-y-4 p-5">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                  <span className="font-bold">{activeStream.masteryPercent}% mastery</span>
+                  <span className="text-muted-foreground">
+                    {activeStream.resourcesCompleted} resources · {activeStream.problemsSolved}{' '}
+                    challenges
+                  </span>
+                </div>
+                <Progress value={activeStream.masteryPercent} />
+                {nextTopic ? (
+                  <div className="rounded-base border-2 border-border bg-background p-4">
+                    <p className="font-heading text-xs font-bold uppercase tracking-wide">
+                      Next up
+                    </p>
+                    <h3 className="mt-1 text-xl font-heading font-bold">{nextTopic.title}</h3>
+                    <p className="mt-2 text-sm text-muted-foreground">{nextTopic.summary}</p>
+                    <div className="mt-4 flex flex-wrap items-center gap-3">
+                      <Button onClick={() => onOpenTopic(nextTopic)}>
+                        {nextTopic.status === 'in_progress'
+                          ? 'Continue learning'
+                          : 'Start learning'}{' '}
+                        <ArrowRight className="size-4" />
+                      </Button>
+                      <span className="text-xs text-muted-foreground">
+                        {nextTopic.estimatedHours}h estimated
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-base border-2 border-border bg-[#05E17A]/20 p-4">
+                    <p className="flex items-center gap-2 font-heading font-bold">
+                      <CheckCircle2 className="size-5" /> All topics mastered
+                    </p>
+                    <p className="mt-1 text-sm">Review your roadmap below or add another one.</p>
+                  </div>
+                )}
+                <details className="text-sm">
+                  <summary className="cursor-pointer font-heading font-bold">
+                    Manage roadmap
+                  </summary>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
                       variant="neutral"
-                      className={cn('uppercase', STREAM_ACCENT[activeStream.colorTheme].pill)}
+                      disabled={busy || !hasActiveProvider}
+                      onClick={() => void manage('refresh', activeStream)}
                     >
-                      Lvl {activeStream.level} · {activeStream.targetRole}
-                    </Badge>
+                      <RefreshCw className="size-4" /> Refresh topics
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="neutral"
+                      disabled={busy}
+                      onClick={() => void manage('pause', activeStream)}
+                    >
+                      {activeStream.status === 'active' ? 'Pause' : 'Resume'}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="danger"
+                      disabled={busy}
+                      onClick={() => void manage('delete', activeStream)}
+                    >
+                      <Trash2 className="size-4" /> Delete roadmap
+                    </Button>
                   </div>
-                  <h2 className="mt-2.5 font-heading text-2xl font-black text-foreground">
-                    {activeStream.title}
-                  </h2>
-                  <p className="mt-1 max-w-3xl text-sm leading-relaxed text-muted-foreground">
-                    {activeStream.description}
-                  </p>
-                  {streamConsistencyNote && (
-                    <div className="mt-3 inline-flex items-center gap-1.5 rounded-base border-2 border-border bg-[#05E17A] px-3 py-1 font-heading text-xs font-bold text-black shadow-[2px_2px_0px_0px_var(--border)]">
-                      <CheckCircle2 className="h-3.5 w-3.5" />
-                      {streamConsistencyNote}
-                    </div>
-                  )}
-                  {errorMsg && !showCustomModal && (
-                    <div className="mt-3 inline-flex items-center gap-1.5 rounded-base border-2 border-border bg-[#FF6B6B] px-3 py-1 font-heading text-xs font-bold text-black shadow-[2px_2px_0px_0px_var(--border)]">
-                      {errorMsg}
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2.5">
-                  <Button
-                    type="button"
-                    variant="default"
-                    size="sm"
-                    onClick={() => handleRefreshStreamNodes(activeStream)}
-                    disabled={refreshingNodes}
-                  >
-                    {refreshingNodes ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <RefreshCw className="h-3.5 w-3.5" />
-                    )}
-                    Refresh Nodes on Demand
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="neutral"
-                    size="sm"
-                    onClick={() => handleTogglePause(activeStream)}
-                  >
-                    {activeStream.status === 'active' ? (
-                      <>
-                        <Pause className="h-3.5 w-3.5" /> Pause Stream
-                      </>
-                    ) : (
-                      <>
-                        <Play className="h-3.5 w-3.5" /> Resume Stream
-                      </>
-                    )}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="danger"
-                    size="sm"
-                    onClick={() => handleDelete(activeStream)}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" /> Delete
-                  </Button>
-                </div>
+                </details>
               </div>
-
-              <div className="space-y-6 p-6">
-                {activeStream.phases.map((phase) => (
-                  <div
-                    key={phase.id}
-                    className="rounded-base border-2 border-border bg-background p-5 shadow-shadow"
-                  >
-                    <div className="mb-4 flex flex-wrap items-start justify-between gap-2 border-b-2 border-border pb-3">
-                      <div>
-                        <Badge variant="violet" className="uppercase tracking-wider">
-                          Phase {phase.phaseOrder}
-                        </Badge>
-                        <h3 className="mt-2 font-heading text-lg font-black text-foreground">
-                          {phase.title}
-                        </h3>
-                        <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground sm:text-sm">
-                          {phase.objective}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="grid gap-4 md:grid-cols-3">
-                      {phase.topics.map((topic) => {
-                        const mastered = topic.status === 'mastered';
-                        const inProg = topic.status === 'in_progress';
-                        return (
-                          <div
-                            key={topic.id}
-                            className={cn(
-                              'neo-card-lift flex flex-col justify-between overflow-hidden rounded-base border-2 border-border shadow-shadow',
-                              topic.isBossTopic
-                                ? 'bg-[#FFDC58]/28'
-                                : mastered
-                                  ? 'bg-[#05E17A]/20'
-                                  : inProg
-                                    ? 'bg-[#88AAEE]/18'
-                                    : 'bg-secondary-background'
-                            )}
-                          >
-                            <div>
-                              {/* Topic Status / Boss Strip */}
-                              <div
-                                className={cn(
-                                  'flex items-center justify-between gap-2 border-b-2 border-border px-4 py-2 text-black',
-                                  topic.isBossTopic
-                                    ? 'bg-[#FFDC58]'
-                                    : mastered
-                                      ? 'bg-[#05E17A]'
-                                      : inProg
-                                        ? 'bg-[#88AAEE]'
-                                        : 'bg-background'
-                                )}
-                              >
-                                <span className="inline-flex items-center gap-1 font-heading text-[10px] font-black uppercase tracking-wider text-foreground">
-                                  {topic.isBossTopic ? (
-                                    <span className="inline-flex items-center gap-1 text-black">
-                                      <Crown className="h-3.5 w-3.5" /> BOSS CAPSTONE
-                                    </span>
-                                  ) : (
-                                    `${topic.difficulty} · ~${topic.estimatedHours}h`
-                                  )}
-                                </span>
-
-                                {mastered ? (
-                                  <Badge variant="mint" className="bg-secondary-background text-[10px]">
-                                    <CheckCircle2 className="h-3 w-3" /> Mastered
-                                  </Badge>
-                                ) : (
-                                  <span className="rounded-base border-2 border-border bg-secondary-background px-1.5 py-0.5 font-mono text-[11px] font-bold text-foreground shadow-[1px_1px_0px_0px_var(--border)]">
-                                    {topic.masteryScore}%
-                                  </span>
-                                )}
-                              </div>
-
-                              <div className="p-4">
-                                <h4 className="font-heading text-sm font-black text-foreground">
-                                  {topic.title}
-                                </h4>
-                                <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
-                                  {topic.summary}
-                                </p>
-
-                                <div className="mt-3 flex flex-wrap gap-1.5">
-                                  {topic.keySkills.slice(0, 4).map((sk, idx) => (
-                                    <span
-                                      key={idx}
-                                      className="rounded-base border border-border bg-secondary-background px-2 py-0.5 font-heading text-[10px] font-bold text-foreground shadow-[1px_1px_0px_0px_var(--border)]"
-                                    >
-                                      {sk}
-                                    </span>
-                                  ))}
-                                </div>
-                              </div>
-                            </div>
-
-                            <div className="space-y-3 border-t-2 border-border bg-secondary-background p-4">
-                              <div className="flex items-center justify-between text-[11px] font-bold text-foreground">
-                                <span className="inline-flex items-center gap-1">
-                                  <BookOpen className="h-3.5 w-3.5 text-foreground" />
-                                  {topic.completedResourceCount}/{topic.resourceCount} Resources
-                                </span>
-                                <span className="inline-flex items-center gap-1">
-                                  <Swords className="h-3.5 w-3.5 text-foreground" />
-                                  {topic.solvedProblemCount}/{topic.problemCount} Challenges
-                                </span>
-                              </div>
-
-                              <Button
-                                type="button"
-                                variant={
-                                  topic.isBossTopic ? 'yellow' : mastered ? 'mint' : 'default'
-                                }
-                                size="sm"
-                                onClick={() => onOpenTopic(topic)}
-                                className="w-full"
-                              >
-                                <Award className="h-3.5 w-3.5" />
-                                Open Learning &amp; Practice Arena
-                                <ArrowRight className="h-3.5 w-3.5" />
-                              </Button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+            </Card>
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-lg font-heading font-bold">All topics</h2>
+              <span className="text-xs text-muted-foreground">
+                {activeStream.phases.length} phases
+              </span>
+            </div>
+            {activeStream.phases.map((phase) => (
+              <details
+                key={`${activeStream.id}-${phase.id}`}
+                open={phase.topics.some((topic) => topic.id === nextTopic?.id)}
+                className="group overflow-hidden rounded-base border-2 border-border bg-secondary-background shadow-brutal-sm"
+              >
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 [&::-webkit-details-marker]:hidden">
+                  <div className="min-w-0">
+                    <p className="text-xs text-muted-foreground">
+                      Phase {phase.phaseOrder} ·{' '}
+                      {phase.topics.filter((t) => t.status === 'mastered').length}/
+                      {phase.topics.length} mastered
+                    </p>
+                    <h3 className="break-words font-heading font-bold">{phase.title}</h3>
                   </div>
-                ))}
-              </div>
-            </motion.div>
-          )}
-        </>
+                  <ChevronDown className="size-5 shrink-0 group-open:rotate-180" />
+                </summary>
+                <div className="border-t border-border">
+                  <p className="px-4 py-3 text-sm text-muted-foreground">{phase.objective}</p>
+                  {phase.topics.map((topic) => (
+                    <button
+                      type="button"
+                      key={topic.id}
+                      onClick={() => onOpenTopic(topic)}
+                      className="flex w-full items-center justify-between gap-3 border-t border-border/30 px-4 py-3 text-left hover:bg-background focus-visible:outline-2 focus-visible:outline-offset-[-2px]"
+                    >
+                      <span className="min-w-0">
+                        <span className="block break-words font-heading text-sm font-bold">
+                          {topic.title}{' '}
+                          {topic.isBossTopic && (
+                            <Badge variant="yellow" className="ml-1">
+                              Capstone
+                            </Badge>
+                          )}
+                        </span>
+                        <span className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                          <span>
+                            {topic.estimatedHours}h · {topic.difficulty}
+                          </span>
+                          <span className="inline-flex items-center gap-1">
+                            <BookOpen className="size-3" /> {topic.completedResourceCount}/
+                            {topic.resourceCount}
+                          </span>
+                          <span className="inline-flex items-center gap-1">
+                            <Swords className="size-3" /> {topic.solvedProblemCount}/
+                            {topic.problemCount}
+                          </span>
+                        </span>
+                      </span>
+                      <span className="flex shrink-0 items-center gap-2 text-xs font-bold">
+                        {topic.status === 'mastered' ? (
+                          <CheckCircle2 className="size-4" />
+                        ) : (
+                          `${topic.masteryScore}%`
+                        )}
+                        <ArrowRight className="size-4" />
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </details>
+            ))}
+          </section>
+        </div>
       )}
-    </PageTransition>
+    </div>
   );
 };

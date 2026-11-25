@@ -109,6 +109,7 @@ export const ResumeRoadmapView: React.FC<Props> = ({
   const [consistencyInfo, setConsistencyInfo] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
+  const [showEditor, setShowEditor] = useState(!latestResume);
 
   const handleFileSelected = async (file: File) => {
     setParsingFile(true);
@@ -144,6 +145,8 @@ export const ResumeRoadmapView: React.FC<Props> = ({
       setConsistencyInfo(res.consistencyNote);
       onGamificationDelta(res.gamificationDelta);
       await onRefreshAll();
+      setShowEditor(false);
+      window.scrollTo({ top: 0 });
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : 'Resume analysis failed');
     } finally {
@@ -152,7 +155,7 @@ export const ResumeRoadmapView: React.FC<Props> = ({
   };
 
   const handleLaunchRoadmap = async (rm: SuggestedRoadmap) => {
-    if (rm.activatedStreamId) {
+    if (rm.activatedStreamId && streams.some((stream) => stream.id === rm.activatedStreamId)) {
       onOpenStream(rm.activatedStreamId);
       return;
     }
@@ -165,6 +168,7 @@ export const ResumeRoadmapView: React.FC<Props> = ({
       });
       onGamificationDelta(res.gamificationDelta);
       await onRefreshAll();
+      onOpenStream(res.stream.id);
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : 'Failed to launch career stream');
     } finally {
@@ -176,7 +180,10 @@ export const ResumeRoadmapView: React.FC<Props> = ({
   const roadmaps = latestResume?.suggestedRoadmaps ?? [];
 
   return (
-    <PageTransition className="space-y-8 text-foreground">
+    <PageTransition className="space-y-6 text-foreground">
+      <header className="flex flex-wrap items-start justify-between gap-3"><div><h1 className="font-heading text-3xl font-bold">Resume &amp; career suggestions</h1><p className="mt-1 text-sm text-muted-foreground">Use your experience to find your next career goal.</p></div>{latestResume && <Button variant="neutral" onClick={() => setShowEditor((v) => !v)} aria-expanded={showEditor}>{showEditor ? 'Hide resume editor' : 'Update resume'}</Button>}</header>
+      {!showEditor && consistencyInfo && <p role="status" className="rounded-base border-2 border-border bg-[#05E17A]/20 p-3 text-sm">{consistencyInfo}</p>}
+      {!showEditor && errorMsg && <p role="alert" className="rounded-base border-2 border-border bg-[#FF6B6B]/20 p-3 text-sm">{errorMsg}</p>}
       {!hasActiveProvider && (
         <div className="flex flex-wrap items-center justify-between gap-4 rounded-base border-2 border-border bg-[#FFDC58] p-4 text-black shadow-shadow">
           <div className="flex items-center gap-3">
@@ -197,11 +204,11 @@ export const ResumeRoadmapView: React.FC<Props> = ({
       )}
 
       {/* Upload & Paste Panel */}
-      <Card className="overflow-hidden border-2 border-border bg-secondary-background p-0 shadow-brutal-lg">
+      {showEditor && <Card className="overflow-hidden border-2 border-border bg-secondary-background p-0 shadow-brutal-lg">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b-2 border-border bg-[#88AAEE] px-6 py-4 text-black">
           <div className="inline-flex items-center gap-2 font-heading text-xs font-black uppercase tracking-wider text-black">
             <FileText className="h-4 w-4" />
-            Resume Intelligence Studio
+            Your resume
           </div>
           <Button
             type="button"
@@ -221,9 +228,7 @@ export const ResumeRoadmapView: React.FC<Props> = ({
         <div className="p-6">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h1 className="font-heading text-2xl font-black tracking-tight text-foreground sm:text-3xl">
-                Upload Your Resume &amp; Discover Career Growth Streams
-              </h1>
+              <h2 className="font-heading text-xl font-bold tracking-tight text-foreground sm:text-2xl">Upload or paste your resume</h2>
               <p className="mt-1.5 text-sm text-muted-foreground">
                 Supports local parsing of{' '}
                 <strong className="font-heading font-bold text-foreground">.pdf</strong>,{' '}
@@ -253,6 +258,10 @@ export const ResumeRoadmapView: React.FC<Props> = ({
               if (f) void handleFileSelected(f);
             }}
             onClick={() => fileInputRef.current?.click()}
+            role="button"
+            tabIndex={0}
+            aria-label="Choose a resume file"
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInputRef.current?.click(); } }}
             className={cn(
               'mt-5 flex cursor-pointer flex-col items-center justify-center rounded-base border-3 border-dashed border-border p-7 text-center transition-all duration-200',
               dragging
@@ -302,10 +311,11 @@ export const ResumeRoadmapView: React.FC<Props> = ({
           {/* Editable Extracted Text + Aspirations */}
           <div className="mt-6 grid gap-5 lg:grid-cols-3">
             <div className="lg:col-span-2">
-              <label className="block font-heading text-xs font-bold uppercase tracking-wider text-foreground">
+              <label htmlFor="resume-text" className="block font-heading text-sm font-bold text-foreground">
                 Extracted / Pasted Resume Content
               </label>
               <Textarea
+                id="resume-text"
                 rows={7}
                 value={rawText}
                 onChange={(e) => setRawText(e.target.value)}
@@ -316,10 +326,11 @@ export const ResumeRoadmapView: React.FC<Props> = ({
 
             <div className="flex flex-col justify-between">
               <div>
-                <label className="block font-heading text-xs font-bold uppercase tracking-wider text-foreground">
+                <label htmlFor="resume-goals" className="block font-heading text-sm font-bold text-foreground">
                   Optional Target Direction / Interests
                 </label>
                 <Textarea
+                  id="resume-goals"
                   rows={4}
                   value={careerGoalsNote}
                   onChange={(e) => setCareerGoalsNote(e.target.value)}
@@ -333,20 +344,20 @@ export const ResumeRoadmapView: React.FC<Props> = ({
                 variant="default"
                 size="lg"
                 onClick={handleAnalyze}
-                disabled={analyzing || rawText.trim().length < 40}
+                disabled={analyzing || parsingFile || !hasActiveProvider || rawText.trim().length < 40}
                 className="mt-4 w-full text-xs sm:text-sm"
               >
                 {analyzing ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    Analyzing Resume &amp; Designing Roadmaps...
+                    Analyzing resume…
                   </>
                 ) : (
                   <>
                     <Sparkles className="h-4 w-4" />
                     {latestResume
-                      ? 'Refresh Roadmaps (On Demand)'
-                      : 'Analyze Resume & Prepare Roadmaps'}
+                      ? 'Update suggestions'
+                      : 'Find my career paths'}
                   </>
                 )}
               </Button>
@@ -383,10 +394,11 @@ export const ResumeRoadmapView: React.FC<Props> = ({
             )}
           </AnimatePresence>
         </div>
-      </Card>
+      </Card>}
 
       {/* Extracted Career Profile Snapshot */}
       {profile && (
+        <details className="rounded-base border-2 border-border bg-secondary-background p-4 shadow-brutal-sm"><summary className="cursor-pointer font-heading font-bold">View analyzed profile &amp; skills</summary><div className="mt-4">
         <Card className="overflow-hidden border-2 border-border bg-secondary-background p-0 shadow-brutal-lg">
           <div className="flex flex-wrap items-start justify-between gap-4 border-b-2 border-border bg-background px-6 py-5">
             <div className="max-w-3xl">
@@ -483,7 +495,7 @@ export const ResumeRoadmapView: React.FC<Props> = ({
               </Card>
             </StaggerItem>
           </StaggerContainer>
-        </Card>
+        </Card></div></details>
       )}
 
       {/* Suggested Multi-Stream Career Roadmaps */}
@@ -492,15 +504,10 @@ export const ResumeRoadmapView: React.FC<Props> = ({
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-base border-2 border-border bg-secondary-background p-5 shadow-shadow">
             <div>
               <h2 className="font-heading text-xl font-black text-foreground sm:text-2xl">
-                Suggested Career Growth Roadmaps ({roadmaps.length})
+                Suggested career paths ({roadmaps.length})
               </h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                Activate{' '}
-                <strong className="font-heading font-bold text-foreground">
-                  multiple roadmaps in parallel
-                </strong>
-                ! Each becomes an independent Career Stream with its own curriculum, practice
-                arena, XP, and mastery tracker.
+                Choose a path to turn it into your personal learning roadmap.
               </p>
             </div>
             {streams.length > 0 && (
@@ -512,7 +519,7 @@ export const ResumeRoadmapView: React.FC<Props> = ({
           </div>
 
           <StaggerContainer className="grid gap-6 lg:grid-cols-2">
-            {roadmaps.map((rm) => {
+            {[...roadmaps].sort((a, b) => b.fitScore - a.fitScore).map((rm) => {
               const linkedStream = rm.activatedStreamId
                 ? streams.find((s) => s.id === rm.activatedStreamId)
                 : null;
@@ -564,7 +571,7 @@ export const ResumeRoadmapView: React.FC<Props> = ({
                         </div>
 
                         {/* Bridge & Gap Skill Chips */}
-                        <div className="grid gap-3 sm:grid-cols-2">
+                        <details className="rounded-base border border-border p-3"><summary className="cursor-pointer font-heading text-sm font-bold">Skills and roadmap preview</summary><div className="mt-3 grid gap-3 sm:grid-cols-2">
                           <div className="rounded-base border-2 border-border bg-[#05E17A]/16 p-3 shadow-[2px_2px_0px_0px_var(--border)]">
                             <div className="font-heading text-[10px] font-black uppercase tracking-wider text-foreground">
                               Bridge Skills You Have
@@ -609,7 +616,7 @@ export const ResumeRoadmapView: React.FC<Props> = ({
                               </div>
                             ))}
                           </div>
-                        )}
+                        )}</details>
                       </div>
                     </div>
 
@@ -622,7 +629,7 @@ export const ResumeRoadmapView: React.FC<Props> = ({
                           className="w-full text-xs"
                         >
                           <Compass className="h-4 w-4" />
-                          Active Stream ({linkedStream.masteryPercent}% Mastery) — Open Stream
+                          Open roadmap · {linkedStream.masteryPercent}% complete
                           <ArrowRight className="h-3.5 w-3.5" />
                         </Button>
                       ) : (
@@ -632,20 +639,18 @@ export const ResumeRoadmapView: React.FC<Props> = ({
                             rm.preparedPhases && rm.preparedPhases.length > 0 ? 'mint' : 'default'
                           }
                           onClick={() => handleLaunchRoadmap(rm)}
-                          disabled={isLaunching}
+                          disabled={launchingId !== null || (!hasActiveProvider && !rm.preparedPhases?.length)}
                           className="w-full text-xs"
                         >
                           {isLaunching ? (
                             <>
                               <Loader2 className="h-4 w-4 animate-spin" />
-                              Activating Stream from Memory Nodes...
+                              Opening roadmap…
                             </>
                           ) : (
                             <>
                               <Rocket className="h-4 w-4" />
-                              {rm.preparedPhases && rm.preparedPhases.length > 0
-                                ? 'Pursue Stream (Instant from Memory · No AI)'
-                                : 'Pursue This Stream Independently'}
+                              Start this roadmap
                             </>
                           )}
                         </Button>

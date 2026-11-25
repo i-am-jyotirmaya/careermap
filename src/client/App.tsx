@@ -12,6 +12,8 @@ import {
   X,
 } from 'lucide-react';
 import { api } from './lib/api.ts';
+import { Button } from '@/components/ui/button';
+import { getNextTopic } from '../shared/learningFlow.ts';
 import { NEO_SPRING, PageTransition } from '@/components/ui/motion-primitives';
 import { OnboardingFlowView } from './components/OnboardingFlowView.tsx';
 import { ResumeRoadmapView } from './components/ResumeRoadmapView.tsx';
@@ -84,6 +86,7 @@ const TOAST_ACCENT_BG: Record<ToastItem['accent'], string> = {
 
 export const App: React.FC = () => {
   const [booting, setBooting] = useState(true);
+  const [bootError, setBootError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<NavTab>('onboarding');
   const [settingsSection, setSettingsSection] = useState<SettingsSectionId>('ai_engine');
   const [neoPalette, setNeoPalette] = useState<NeoPaletteId>(() => {
@@ -103,7 +106,9 @@ export const App: React.FC = () => {
   const [routingDecisions, setRoutingDecisions] = useState<RoutingDecision[]>([]);
   const [latestResume, setLatestResume] = useState<ResumeRecord | null>(null);
   const [streams, setStreams] = useState<CareerStream[]>([]);
-  const [selectedStreamId, setSelectedStreamId] = useState<string | null>(null);
+  const [selectedStreamId, setSelectedStreamId] = useState<string | null>(() => {
+    try { return window.localStorage.getItem('cf_selected_stream'); } catch { return null; }
+  });
   const [activeTopicId, setActiveTopicId] = useState<string | null>(null);
   const [profile, setProfile] = useState<PlayerProfile | null>(null);
 
@@ -181,15 +186,16 @@ export const App: React.FC = () => {
 
     if (streamRes.streams.length > 0) {
       setSelectedStreamId((prev) =>
-        prev && streamRes.streams.some((s) => s.id === prev) ? prev : streamRes.streams[0]!.id
+        prev && streamRes.streams.some((s) => s.id === prev) ? prev : (streamRes.streams.find((s) => s.status === 'active') ?? streamRes.streams[0]!).id
       );
+      setActiveTopicId((prev) => prev && streamRes.streams.some((s) => s.phases.some((p) => p.topics.some((t) => t.id === prev))) ? prev : null);
     } else {
       setSelectedStreamId(null);
       setActiveTopicId(null);
     }
 
     if (isInitial) {
-      if (!statusRes.status.isOnboarded || !statusRes.status.hasActiveProvider) {
+      if (!statusRes.status.isOnboarded) {
         setActiveTab('onboarding');
       } else {
         setActiveTab('streams');
@@ -217,9 +223,21 @@ export const App: React.FC = () => {
     root.setAttribute('data-animations', enabled ? 'on' : 'off');
   }, [status?.preferences.animationsEnabled]);
 
-  useEffect(() => {
-    void refreshAll(true).finally(() => setBooting(false));
+  const boot = useCallback(async () => {
+    setBooting(true);
+    setBootError(null);
+    try { await refreshAll(true); }
+    catch (err) { setBootError(err instanceof Error ? err.message : 'Unable to load your workspace.'); }
+    finally { setBooting(false); }
   }, [refreshAll]);
+  useEffect(() => { void boot(); }, [boot]);
+  useEffect(() => {
+    try {
+      if (selectedStreamId) window.localStorage.setItem('cf_selected_stream', selectedStreamId);
+      else window.localStorage.removeItem('cf_selected_stream');
+    } catch { /* storage unavailable */ }
+  }, [selectedStreamId]);
+  useEffect(() => { window.scrollTo({ top: 0 }); }, [activeTab, activeTopicId]);
 
   // Konami Code + Ctrl+K Oracle Console shortcut
   useEffect(() => {
@@ -276,6 +294,9 @@ export const App: React.FC = () => {
     handleGamificationDelta(res.delta);
   };
 
+  if (!booting && bootError) {
+    return <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-4 p-6"><h1 className="font-heading text-2xl font-bold">Couldn't open your workspace</h1><p role="alert" className="text-sm text-muted-foreground">{bootError}</p><Button onClick={() => void boot()}>Try again</Button></main>;
+  }
   if (booting || !status || !jevConfig || !profile) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background text-foreground">
@@ -289,7 +310,7 @@ export const App: React.FC = () => {
             <Loader2 className="h-5 w-5 animate-spin text-black" />
           </div>
           <span className="font-heading text-sm font-bold text-foreground">
-            Igniting CareerForge &amp; Local SQLite...
+            Opening your workspace…
           </span>
         </motion.div>
       </div>
@@ -303,13 +324,9 @@ export const App: React.FC = () => {
   };
 
   const handleOpenArenaDefault = () => {
-    if (activeTopicId) {
-      setActiveTab('workbench');
-      return;
-    }
     const targetStream =
       streams.find((s) => s.id === selectedStreamId) ?? streams[0] ?? null;
-    const firstTopic = targetStream?.phases[0]?.topics[0] ?? null;
+    const firstTopic = targetStream ? targetStream.phases.flatMap((p) => p.topics).find((t) => t.id === activeTopicId) ?? getNextTopic(targetStream) ?? targetStream.phases[0]?.topics[0] : null;
     if (firstTopic) {
       setSelectedStreamId(targetStream!.id);
       setActiveTopicId(firstTopic.id);
@@ -333,7 +350,7 @@ export const App: React.FC = () => {
     }
     await refreshAll(false);
     if (action === 'factory_reset') {
-      setActiveTab('streams');
+      setActiveTab('onboarding');
       pushToast(
         'Factory Reset Complete',
         'Returned CareerForge to fresh first-run onboarding.',
@@ -349,9 +366,9 @@ export const App: React.FC = () => {
   };
 
   // Requirement 2 & 3: Mandatory Onboarding Flow on Homepage before letting new users into the application
-  if (!status.isOnboarded || !status.hasActiveProvider || activeTab === 'onboarding') {
+  if (!status.isOnboarded || activeTab === 'onboarding') {
     return (
-      <MotionConfig reducedMotion={status.preferences.animationsEnabled ? 'never' : 'always'}>
+      <MotionConfig reducedMotion={status.preferences.animationsEnabled ? 'user' : 'always'}>
         <div
           className={`min-h-screen bg-background text-foreground ${overclockMode ? 'overclock-grid' : ''}`}
         >
@@ -413,21 +430,19 @@ export const App: React.FC = () => {
   }> = [
     {
       id: 'streams',
-      label: 'Career Streams',
+      label: 'My roadmaps',
       icon: <Layers className="h-4 w-4" />,
-      badge: streams.length > 0 ? String(streams.length) : 'Dashboard',
     },
     {
       id: 'resume',
-      label: 'Resume & Roadmaps',
+      label: 'Resume',
       icon: <FileText className="h-4 w-4" />,
-      badge: latestResume ? 'Analyzed' : undefined,
     },
     ...(streams.length > 0 || activeTopicId
       ? [
           {
             id: 'workbench' as NavTab,
-            label: 'Topic Arena',
+            label: 'Learn',
             icon: <Swords className="h-4 w-4" />,
             onClick: handleOpenArenaDefault,
           },
@@ -442,13 +457,13 @@ export const App: React.FC = () => {
   };
 
   return (
-    <MotionConfig reducedMotion={status.preferences.animationsEnabled ? 'never' : 'always'}>
+    <MotionConfig reducedMotion={status.preferences.animationsEnabled ? 'user' : 'always'}>
       <div
         className={`min-h-screen bg-background text-foreground ${overclockMode ? 'overclock-grid' : ''}`}
       >
         {/* Sticky Neobrutalist Top Command Header + Top-Right User Avatar Menu */}
         <header className="sticky top-0 z-30 border-b-3 border-border bg-secondary-background shadow-[0px_4px_0px_0px_rgba(0,0,0,0.08)]">
-          <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-3 sm:px-6">
+          <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-3 py-3 sm:px-6">
             {/* Brand + 7-Tap Anvil Easter Egg */}
             <motion.button
               type="button"
@@ -472,22 +487,20 @@ export const App: React.FC = () => {
                     </span>
                   )}
                 </div>
-                <div className="text-[10px] font-bold text-black/75">
-                  Local SQLite · Multi-Stream AI
-                </div>
               </div>
             </motion.button>
 
             {/* Primary Center Navigation with Spring layoutId Pill */}
-            <nav className="flex flex-wrap items-center gap-1.5 rounded-base border-2 border-border bg-background p-1 shadow-[3px_3px_0px_0px_var(--border)]">
+            <nav aria-label="Primary navigation" className="order-last flex w-full flex-wrap items-center justify-center gap-1 rounded-base border-2 border-border bg-background p-1 sm:order-none sm:w-auto">
               {navItems.map((item) => {
                 const isCurrent = activeTab === item.id;
                 return (
                   <button
                     key={item.id}
                     type="button"
+                    aria-current={isCurrent ? 'page' : undefined}
                     onClick={() => (item.onClick ? item.onClick() : setActiveTab(item.id))}
-                    className="relative inline-flex cursor-pointer items-center gap-1.5 rounded-base px-3.5 py-1.5 font-heading text-xs font-bold text-foreground transition-colors"
+                    className="relative inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-base px-2.5 py-1.5 font-heading text-sm font-bold text-foreground transition-colors focus-visible:ring-2 focus-visible:ring-ring sm:px-3.5"
                   >
                     {isCurrent && (
                       <motion.span
@@ -530,6 +543,7 @@ export const App: React.FC = () => {
               <button
                 type="button"
                 onClick={cyclePalette}
+                aria-label="Change color palette"
                 title={`Switch Neobrutalism Palette (Current: ${NEO_PALETTES.find((p) => p.id === neoPalette)?.label})`}
                 className="neo-press inline-flex h-10 cursor-pointer items-center gap-1.5 rounded-base border-2 border-border bg-secondary-background px-2.5 font-heading text-xs font-bold text-foreground shadow-[2px_2px_0px_0px_var(--border)]"
               >
@@ -555,7 +569,7 @@ export const App: React.FC = () => {
         </header>
 
         {/* Main Content Container with Fluent Page Transitions */}
-        <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
+        <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
           <AnimatePresence mode="wait">
             {activeTab === 'streams' && (
               <PageTransition key="view-streams">
@@ -568,6 +582,7 @@ export const App: React.FC = () => {
                   onRefreshAll={() => refreshAll(false)}
                   onGamificationDelta={handleGamificationDelta}
                   onGoToResume={() => setActiveTab('resume')}
+                  onGoToSetup={() => { setSettingsSection('ai_engine'); setActiveTab('settings'); }}
                   compactCards={status.preferences.compactStreamCards}
                 />
               </PageTransition>
@@ -593,10 +608,13 @@ export const App: React.FC = () => {
               </PageTransition>
             )}
 
+            {activeTab === 'workbench' && !activeTopicId && <PageTransition key="view-empty-topic"><div className="space-y-4"><h1 className="font-heading text-2xl font-bold">Choose a topic to learn</h1><Button onClick={() => setActiveTab('streams')}>View roadmaps</Button></div></PageTransition>}
             {activeTab === 'workbench' && activeTopicId && (
               <PageTransition key={`view-workbench-${activeTopicId}`}>
                 <TopicWorkbenchView
                   topicId={activeTopicId}
+                  hasActiveProvider={status.hasActiveProvider}
+                  onGoToSetup={() => { setSettingsSection('ai_engine'); setActiveTab('settings'); }}
                   onBackToStream={(streamId) => {
                     setSelectedStreamId(streamId);
                     setActiveTab('streams');

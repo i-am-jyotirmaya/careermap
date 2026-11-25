@@ -209,6 +209,7 @@ export const UserAvatarMenu: React.FC<UserAvatarMenuProps> = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const menuContainerRef = useRef<HTMLDivElement | null>(null);
+  const menuButtonRef = useRef<HTMLButtonElement | null>(null);
 
   const isMenuDestinationActive =
     activeDestination === 'profile' ||
@@ -239,6 +240,7 @@ export const UserAvatarMenu: React.FC<UserAvatarMenuProps> = ({
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         setIsOpen(false);
+        menuButtonRef.current?.focus();
       }
     };
 
@@ -264,8 +266,10 @@ export const UserAvatarMenu: React.FC<UserAvatarMenuProps> = ({
     <div ref={menuContainerRef} className="relative">
       {/* Top-Right Neobrutalist User Avatar Trigger */}
       <button
+        ref={menuButtonRef}
         type="button"
-        aria-haspopup="menu"
+        aria-label="Profile and settings"
+        aria-controls="profile-navigation"
         aria-expanded={isOpen}
         onClick={() => setIsOpen((prev) => !prev)}
         className={`neo-press group inline-flex cursor-pointer items-center gap-2.5 rounded-base border-2 border-border px-2.5 py-1.5 text-left sm:pr-3 ${
@@ -306,13 +310,14 @@ export const UserAvatarMenu: React.FC<UserAvatarMenuProps> = ({
       <AnimatePresence>
         {isOpen && (
           <motion.div
-            role="menu"
+            id="profile-navigation"
+            role="navigation"
             aria-label="User navigation menu"
             initial={{ opacity: 0, y: -8, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -6, scale: 0.96 }}
             transition={NEO_SPRING}
-            className="absolute right-0 top-full z-50 mt-2.5 w-80 origin-top-right overflow-hidden rounded-base border-2 border-border bg-secondary-background text-foreground shadow-brutal-lg sm:w-[22rem]"
+            className="absolute right-0 top-full z-50 mt-2.5 max-h-[75vh] w-[min(20rem,calc(100vw-2rem))] origin-top-right overflow-y-auto rounded-base border-2 border-border bg-secondary-background text-foreground shadow-brutal-lg sm:w-[22rem]"
           >
             {/* Profile Header Card */}
             <div className="border-b-2 border-border bg-background p-4">
@@ -383,7 +388,6 @@ export const UserAvatarMenu: React.FC<UserAvatarMenuProps> = ({
             <div className="space-y-1.5 p-2.5">
               <button
                 type="button"
-                role="menuitem"
                 onClick={() => handleSelectDestination('profile')}
                 className={`flex w-full cursor-pointer items-center gap-3 rounded-base border-2 px-3 py-2.5 text-left transition-all duration-150 ${
                   activeDestination === 'profile'
@@ -404,7 +408,6 @@ export const UserAvatarMenu: React.FC<UserAvatarMenuProps> = ({
 
               <button
                 type="button"
-                role="menuitem"
                 onClick={() => handleSelectDestination('vault')}
                 className={`flex w-full cursor-pointer items-center gap-3 rounded-base border-2 px-3 py-2.5 text-left transition-all duration-150 ${
                   activeDestination === 'vault'
@@ -418,21 +421,20 @@ export const UserAvatarMenu: React.FC<UserAvatarMenuProps> = ({
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-heading text-xs font-bold text-foreground">
-                      Vault &amp; Achievements
+                      Achievements
                     </span>
                     <Badge variant="violet" className="px-2 py-0 font-mono text-[10px]">
                       {unlockedCount}/{totalAchievements}
                     </Badge>
                   </div>
                   <div className="truncate text-[11px] text-muted-foreground">
-                    Reliquary, buffs, quests &amp; badges
+                    Rewards, quests &amp; badges
                   </div>
                 </div>
               </button>
 
               <button
                 type="button"
-                role="menuitem"
                 onClick={() => handleSelectDestination('settings')}
                 className={`flex w-full cursor-pointer items-center gap-3 rounded-base border-2 px-3 py-2.5 text-left transition-all duration-150 ${
                   activeDestination === 'settings'
@@ -463,7 +465,6 @@ export const UserAvatarMenu: React.FC<UserAvatarMenuProps> = ({
 
               <button
                 type="button"
-                role="menuitem"
                 onClick={handleTriggerConsole}
                 className="flex w-full cursor-pointer items-center justify-between gap-3 rounded-base border-2 border-border bg-[#22D3EE]/20 px-3 py-2 text-left text-foreground transition-all duration-150 hover:bg-[#22D3EE]/45 hover:shadow-[2px_2px_0px_0px_var(--border)]"
               >

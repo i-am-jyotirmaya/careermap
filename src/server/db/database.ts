@@ -572,7 +572,7 @@ export class CareerForgeDB {
         animations_enabled INTEGER NOT NULL DEFAULT 1,
         compact_stream_cards INTEGER NOT NULL DEFAULT 0,
         default_language_hint TEXT NOT NULL DEFAULT 'typescript',
-        show_roadmap_flow_in_arena INTEGER NOT NULL DEFAULT 1
+        show_roadmap_flow_in_arena INTEGER NOT NULL DEFAULT 0
       );
     `);
 
@@ -621,7 +621,7 @@ export class CareerForgeDB {
       .prepare(
         `INSERT OR IGNORE INTO app_preferences (
            id, animations_enabled, compact_stream_cards, default_language_hint, show_roadmap_flow_in_arena
-         ) VALUES (1, 1, 0, 'typescript', 1)`
+         ) VALUES (1, 1, 0, 'typescript', 0)`
       )
       .run();
 
@@ -2308,7 +2308,7 @@ export class CareerForgeDB {
         animationsEnabled: true,
         compactStreamCards: false,
         defaultLanguageHint: 'typescript',
-        showRoadmapFlowInArena: true,
+        showRoadmapFlowInArena: false,
       };
     }
     return {
