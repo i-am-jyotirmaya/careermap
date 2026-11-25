@@ -1,0 +1,166 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+:root {
+  --background: hsl(48, 100%, 96%);
+  --secondary-background: #ffffff;
+  --foreground: #09090b;
+  --muted-foreground: #3f3f46;
+  --main: #88aaee;
+  --main-foreground: #09090b;
+  --accent-yellow: #ffdc58;
+  --accent-mint: #05e17a;
+  --accent-violet: #a985ff;
+  --accent-coral: #ff6b6b;
+  --accent-orange: #ff9f43;
+  --accent-cyan: #22d3ee;
+  --border: #000000;
+  --ring: #000000;
+  --overlay: rgba(0, 0, 0, 0.72);
+  --shadow: 4px 4px 0px 0px var(--border);
+  --shadow-lg: 6px 6px 0px 0px var(--border);
+  --shadow-sm: 2px 2px 0px 0px var(--border);
+  --chart-1: #5294ff;
+  --chart-2: #ff4d50;
+  --chart-3: #facc00;
+  --chart-4: #05e17a;
+  --chart-5: #a985ff;
+  --neo-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+[data-neo-palette="violet"] {
+  --background: hsl(259, 94%, 95%);
+  --main: #a985ff;
+}
+
+[data-neo-palette="blue"] {
+  --background: hsl(214, 95%, 94%);
+  --main: #5294ff;
+}
+
+[data-neo-palette="mint"] {
+  --background: hsl(152, 76%, 94%);
+  --main: #05e17a;
+}
+
+[data-neo-palette="sunburst"] {
+  --background: hsl(48, 100%, 95%);
+  --main: #ffdc58;
+}
+
+@theme inline {
+  --color-main: var(--main);
+  --color-background: var(--background);
+  --color-secondary-background: var(--secondary-background);
+  --color-foreground: var(--foreground);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-main-foreground: var(--main-foreground);
+  --color-border: var(--border);
+  --color-ring: var(--ring);
+  --color-overlay: var(--overlay);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --spacing-boxShadowX: 4px;
+  --spacing-boxShadowY: 4px;
+  --spacing-reverseBoxShadowX: -4px;
+  --spacing-reverseBoxShadowY: -4px;
+  --radius-base: 6px;
+  --font-sans: "DM Sans", system-ui, -apple-system, sans-serif;
+  --font-heading: "Space Grotesk", "DM Sans", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-weight-base: 500;
+  --font-weight-heading: 700;
+  --shadow-shadow: var(--shadow);
+  --shadow-brutal-lg: var(--shadow-lg);
+  --shadow-brutal-sm: var(--shadow-sm);
+  --animate-marquee: marquee 18s linear infinite;
+}
+
+@layer base {
+  body {
+    font-family: var(--font-sans);
+    font-weight: var(--font-weight-base);
+    color: var(--foreground);
+    background-color: var(--background);
+    background-image: radial-gradient(rgba(0, 0, 0, 0.13) 1.25px, transparent 1.25px);
+    background-size: 22px 22px;
+    transition: background-color 280ms var(--neo-ease);
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-heading);
+    font-weight: var(--font-weight-heading);
+    letter-spacing: -0.02em;
+  }
+
+  ::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+  }
+  ::-webkit-scrollbar-track {
+    background: var(--secondary-background);
+    border-left: 2px solid var(--border);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--main);
+    border: 2px solid var(--border);
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #ffdc58;
+  }
+}
+
+@keyframes marquee {
+  0% {
+    transform: translateX(0%);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.neo-press {
+  transition:
+    transform 180ms var(--neo-ease),
+    box-shadow 180ms var(--neo-ease),
+    background-color 180ms var(--neo-ease);
+}
+
+.neo-press:hover:not(:disabled) {
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0px 0px var(--border);
+}
+
+.neo-press:active:not(:disabled) {
+  transform: translate(4px, 4px);
+  box-shadow: 0px 0px 0px 0px var(--border);
+}
+
+.neo-card-lift {
+  transition:
+    transform 220ms var(--neo-ease),
+    box-shadow 220ms var(--neo-ease),
+    background-color 220ms var(--neo-ease);
+}
+
+.neo-card-lift:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0px 0px var(--border);
+}
+
+.overclock-grid {
+  background-image:
+    linear-gradient(to right, rgba(0, 0, 0, 0.14) 1.5px, transparent 1.5px),
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.14) 1.5px, transparent 1.5px);
+  background-size: 28px 28px;
+}
+
+[data-animations="off"] *,
+[data-animations="off"] *::before,
+[data-animations="off"] *::after {
+  animation-duration: 0.01ms !important;
+  transition-duration: 0.01ms !important;
+}
